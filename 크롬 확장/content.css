@@ -1,8 +1,7 @@
 /* ============================================================
-   ONEPACE — CONTENT UI
-   content-ui.html 전용 FINAL CSS
+   ONE PACE — CONTENT UI
+   content-ui.html 전용 FINAL CSS (UX/UI 디자인 반영)
    ============================================================ */
-
 
 /* ============================================================
    GLOBAL
@@ -13,1050 +12,622 @@
   box-sizing: border-box;
 }
 
-
 /* ============================================================
-   ONEPACE ROOT
-   입력창 위에 UI를 겹쳐 배치
+   ONE PACE ROOT
    ============================================================ */
 
 #onepace-global-root {
   position: absolute !important;
-
   left: 0 !important;
   bottom: 100% !important;
-
   width: 100% !important;
   height: 38px !important;
-
-  margin: 0 !important;
-  padding: 0 !important;
-
-  overflow: visible !important;
-
   z-index: 2147483646 !important;
-
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    "Noto Sans KR",
-    Arial,
-    sans-serif !important;
-
-  color: #333333 !important;
-
+  overflow: visible !important;
   pointer-events: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", Arial, sans-serif !important;
+  color: #333333 !important;
 }
 
-
 /* ============================================================
-   OP ROW
+   TOP ROW & GLOBE BUTTON
    ============================================================ */
 
 #onepace-global-root .op-row {
   position: absolute !important;
-
   left: 0 !important;
   bottom: 0 !important;
-
   width: auto !important;
   height: 30px !important;
-
   display: flex !important;
   align-items: center !important;
-
-  gap: 8px !important;
-
   margin: 0 !important;
   padding: 0 !important;
-
-  z-index: 2147483647 !important;
-
+  gap: 5px !important;
   pointer-events: auto !important;
+  z-index: 2147483647 !important;
 }
-
-
-/* ============================================================
-   GLOBE BUTTON
-   ============================================================ */
 
 #onepace-global-root .onepace-globe-button {
   width: 30px !important;
   height: 30px !important;
-
-  min-width: 30px !important;
-  min-height: 30px !important;
-
   flex: 0 0 30px !important;
-
   display: inline-flex !important;
-
   align-items: center !important;
   justify-content: center !important;
-
   margin: 0 !important;
   padding: 0 !important;
-
-  border: 0 !important;
+  border: none !important;
   border-radius: 0 !important;
-
-  outline: none !important;
-
   background: transparent !important;
   box-shadow: none !important;
-
   color: #00bfa5 !important;
-
-  font-family: inherit !important;
   font-size: 18px !important;
   line-height: 1 !important;
-
   cursor: pointer !important;
-
   appearance: none !important;
-
-  transition:
-    transform 0.12s ease,
-    opacity 0.12s ease !important;
+  transition: transform 0.12s ease, opacity 0.12s ease !important;
 }
-
 
 #onepace-global-root .onepace-globe-button:hover {
   background: transparent !important;
-
   color: #00bfa5 !important;
-
   transform: scale(1.06) !important;
 }
 
-
+#onepace-global-root .onepace-globe-button:focus,
 #onepace-global-root .onepace-globe-button:active {
-  background: transparent !important;
-
-  transform: scale(0.98) !important;
-}
-
-
-#onepace-global-root .onepace-globe-button:focus {
   outline: none !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
-
+/* ============================================================
+   COUNTRY STATUS & POPUP
+   ============================================================ */
 /* ============================================================
    COUNTRY STATUS
    ============================================================ */
 
 #onepace-global-root .onepace-country-status {
   display: none !important;
-
   align-items: center !important;
+  gap: 4px !important;
 
-  gap: 3px !important;
+  height: 25px !important;
 
-  height: 30px !important;
+  margin: 0 0 5px 0 !important;
+  padding: 0 10px !important;
 
-  margin: 0 !important;
-  padding: 0 !important;
+  background: #f3f4f6 !important;
+  border-radius: 7px !important;
 
   white-space: nowrap !important;
-
-  color: #777777 !important;
-
-  font-family: inherit !important;
-  font-size: 11px !important;
+  color: #666666 !important;
+  font-size: 13px !important;
   line-height: 1 !important;
-
   pointer-events: none !important;
 }
-
 
 #onepace-global-root .onepace-country-status.show {
   display: inline-flex !important;
 }
 
-
 #onepace-global-root .onepace-status-country {
-  color: #333333 !important;
-
+  color: #111111 !important;
   font-weight: 700 !important;
 }
 
-
 #onepace-global-root .onepace-status-time {
-  color: #999999 !important;
-
+  color: #888888 !important;
   font-weight: 400 !important;
+  margin-left: 2px !important;
 }
-
-
-/* ============================================================
-   COUNTRY POPUP
-   ============================================================ */
 
 #onepace-global-root .onepace-country-popup {
   position: absolute !important;
-
   left: 0 !important;
   bottom: 36px !important;
-
   top: auto !important;
-
-  width: 250px !important;
-  min-width: 250px !important;
-  max-width: 250px !important;
-
-  height: auto !important;
-
+  width: 260px !important;
+  min-width: 260px !important;
+  max-width: 260px !important;
   display: none !important;
   flex-direction: column !important;
-
   margin: 0 !important;
   padding: 0 !important;
-
   overflow: hidden !important;
-
   background: #ffffff !important;
-
-  border: 1px solid #dedfe2 !important;
-  border-radius: 10px !important;
-
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.14) !important;
-
+  border: 1px solid #e5e7eb !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12) !important;
   z-index: 2147483647 !important;
-
   pointer-events: auto !important;
-
-  font-family: inherit !important;
 }
-
 
 #onepace-global-root .onepace-country-popup.open {
   display: flex !important;
 }
 
-
-/* ============================================================
-   COUNTRY TITLE
-   ============================================================ */
-
 #onepace-global-root .onepace-country-title {
   width: 100% !important;
-  height: 36px !important;
-
+  height: 40px !important;
   display: flex !important;
   align-items: center !important;
-
   margin: 0 !important;
-  padding: 0 12px !important;
-
-  border: 0 !important;
-  border-bottom: 1px solid #eeeeee !important;
-
+  padding: 0 14px !important;
+  border-bottom: 1px solid #f0f0f0 !important;
   background: #ffffff !important;
-
-  color: #333333 !important;
-
-  font-family: inherit !important;
-  font-size: 12px !important;
+  color: #111111 !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
   line-height: 1 !important;
 }
-
-
-/* ============================================================
-   COUNTRY SEARCH WRAP
-   ============================================================ */
 
 #onepace-global-root .onepace-country-search-wrap {
   position: relative !important;
-
   width: 100% !important;
   height: 48px !important;
-
   display: flex !important;
   align-items: center !important;
-
   margin: 0 !important;
-  padding: 8px 10px !important;
-
-  border: 0 !important;
-  border-bottom: 1px solid #eeeeee !important;
-
+  padding: 8px 12px !important;
+  border-bottom: 1px solid #f0f0f0 !important;
   background: #ffffff !important;
 }
-
-
-/* ============================================================
-   SEARCH ICON
-   ============================================================ */
 
 #onepace-global-root .onepace-search-icon {
   position: absolute !important;
-
-  left: 18px !important;
+  left: 20px !important;
   top: 50% !important;
-
   transform: translateY(-50%) !important;
-
   z-index: 2 !important;
-
-  color: #999999 !important;
-
+  color: #9da3ae !important;
   font-size: 14px !important;
   line-height: 1 !important;
-
   pointer-events: none !important;
 }
 
-
-/* ============================================================
-   SEARCH INPUT
-   ============================================================ */
-
 #onepace-global-root .onepace-country-search {
   width: 100% !important;
-  height: 30px !important;
-
+  height: 32px !important;
   margin: 0 !important;
-  padding: 0 9px 0 29px !important;
-
-  border: 1px solid #dddddd !important;
-  border-radius: 6px !important;
-
+  padding: 0 10px 0 30px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
   outline: none !important;
-
-  background: #fafafa !important;
-
-  color: #333333 !important;
-
+  background: #f9fafb !important;
+  color: #111111 !important;
   font-family: inherit !important;
   font-size: 12px !important;
-  line-height: 30px !important;
-
+  line-height: 32px !important;
   appearance: none !important;
 }
-
 
 #onepace-global-root .onepace-country-search:focus {
   border-color: #00bfa5 !important;
-
   background: #ffffff !important;
 }
 
-
 #onepace-global-root .onepace-country-search::placeholder {
-  color: #999999 !important;
+  color: #9da3ae !important;
 }
-
-
-/* ============================================================
-   COUNTRY LIST
-   ============================================================ */
 
 #onepace-global-root .onepace-country-list {
   width: 100% !important;
-
-  min-height: 0 !important;
   max-height: 190px !important;
-
   display: block !important;
-
   margin: 0 !important;
   padding: 4px 0 !important;
-
   overflow-x: hidden !important;
   overflow-y: auto !important;
-
   background: #ffffff !important;
 }
 
-
-/* ============================================================
-   COUNTRY ITEM
-   JS가 생성하는 button
-   ============================================================ */
-
-#onepace-global-root .onepace-country-list
-.onepace-country-item {
+#onepace-global-root .onepace-country-list button {
   width: 100% !important;
-
-  height: 34px !important;
-  min-height: 34px !important;
-
+  height: 36px !important;
+  min-height: 36px !important;
   display: flex !important;
   align-items: center !important;
-
   gap: 8px !important;
-
   margin: 0 !important;
-  padding: 0 11px !important;
-
-  border: 0 !important;
-  border-radius: 0 !important;
-
-  outline: none !important;
-
+  padding: 0 14px !important;
+  border: none !important;
   background: #ffffff !important;
-
   color: #333333 !important;
-
   text-align: left !important;
-
   font-family: inherit !important;
   font-size: 12px !important;
   line-height: 1 !important;
-
   cursor: pointer !important;
-
   appearance: none !important;
 }
 
-
-#onepace-global-root .onepace-country-list
-.onepace-country-item:hover {
+#onepace-global-root .onepace-country-list button:hover {
   background: #f4f6f6 !important;
 }
 
-
-#onepace-global-root .onepace-country-list
-.onepace-country-item.selected {
-  background: #effcf9 !important;
-
-  color: #00a990 !important;
-
+#onepace-global-root .onepace-country-list button.selected {
+  background: #e6fcf5 !important;
+  color: #0d9488 !important;
   font-weight: 700 !important;
 }
 
-
-/* ============================================================
-   COUNTRY FLAG
-   ============================================================ */
-
-#onepace-global-root .onepace-country-flag {
+#onepace-global-root .onepace-country-list .onepace-country-flag {
   width: 20px !important;
   min-width: 20px !important;
-
-  flex: 0 0 20px !important;
-
   display: inline-flex !important;
-
   align-items: center !important;
   justify-content: center !important;
-
   font-size: 15px !important;
-  line-height: 1 !important;
 }
 
-
-/* ============================================================
-   COUNTRY NAME
-   ============================================================ */
-
-#onepace-global-root .onepace-country-name {
-  display: inline-block !important;
-
-  overflow: hidden !important;
-
-  white-space: nowrap !important;
-  text-overflow: ellipsis !important;
-
-  color: inherit !important;
-
-  font-family: inherit !important;
-  font-size: 12px !important;
-  line-height: 1 !important;
-}
-
-
-/* ============================================================
-   COUNTRY EMPTY
-   ============================================================ */
-
-#onepace-global-root .onepace-country-empty {
+#onepace-global-root .onepace-country-list .onepace-country-empty {
   width: 100% !important;
-
-  margin: 0 !important;
   padding: 16px 10px !important;
-
   color: #999999 !important;
-
   text-align: center !important;
-
-  font-family: inherit !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
   line-height: 1.4 !important;
 }
 
-
-/* ============================================================
-   COUNTRY FOOTER
-   ============================================================ */
-
 #onepace-global-root .onepace-country-footer {
   width: 100% !important;
-
   margin: 0 !important;
-  padding: 7px !important;
-
-  border: 0 !important;
-  border-top: 1px solid #eeeeee !important;
-
-  background: #fafafa !important;
+  padding: 8px 12px !important;
+  border-top: 1px solid #f0f0f0 !important;
+  background: #f9fafb !important;
 }
-
-
-/* ============================================================
-   COUNTRY CLOSE
-   ============================================================ */
 
 #onepace-global-root .onepace-country-close {
   width: 100% !important;
-  height: 29px !important;
-
+  height: 30px !important;
   display: flex !important;
-
   align-items: center !important;
   justify-content: center !important;
-
   margin: 0 !important;
   padding: 0 !important;
-
-  border: 0 !important;
+  border: none !important;
   border-radius: 6px !important;
-
-  outline: none !important;
-
-  background: #e5e5e5 !important;
-
-  color: #444444 !important;
-
+  background: #e5e7eb !important;
+  color: #4b5563 !important;
   font-family: inherit !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
   line-height: 1 !important;
-
   cursor: pointer !important;
-
   appearance: none !important;
 }
 
-
 #onepace-global-root .onepace-country-close:hover {
-  background: #dcdcdc !important;
+  background: #d1d5db !important;
 }
-
-
-/* ============================================================
-   COUNTRY SCROLLBAR
-   ============================================================ */
 
 #onepace-global-root .onepace-country-list::-webkit-scrollbar {
   width: 5px !important;
 }
 
-
 #onepace-global-root .onepace-country-list::-webkit-scrollbar-track {
   background: transparent !important;
 }
 
-
 #onepace-global-root .onepace-country-list::-webkit-scrollbar-thumb {
-  background: #d2d5d8 !important;
-
+  background: #d1d5db !important;
   border-radius: 10px !important;
 }
 
-
 /* ============================================================
-   WARNING
-   content-ui.html:
-   #onepace-realtime-warning
+   REALTIME WARNING CONTAINER
    ============================================================ */
 
 #onepace-realtime-warning {
   position: fixed !important;
-
-  left: 0 !important;
-  top: 0 !important;
-
-  width: 330px !important;
-  max-width: calc(100vw - 32px) !important;
-
+  width: max-content !important;
+  min-width: 320px !important;
+  max-width: min(420px, calc(100vw - 32px)) !important;
   margin: 0 !important;
   padding: 0 !important;
-
   z-index: 2147483647 !important;
-
   display: block !important;
-
   visibility: visible !important;
   opacity: 1 !important;
-
-  pointer-events: none !important;
-
+  pointer-events: auto !important;
   box-sizing: border-box !important;
-
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    "Noto Sans KR",
-    Arial,
-    sans-serif !important;
-
-  color: #222222 !important;
-
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", Arial, sans-serif !important;
+  color: #111111 !important;
   text-align: left !important;
 }
 
-
-/* ============================================================
-   WARNING BACKDROP
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-backdrop {
-  position: fixed !important;
-
-  inset: 0 !important;
-
-  width: 100vw !important;
-  height: 100vh !important;
-
-  display: flex !important;
-
-  align-items: flex-start !important;
-  justify-content: flex-start !important;
-
-  margin: 0 !important;
-  padding: 0 !important;
-
-  background: transparent !important;
-
-  pointer-events: none !important;
-
-  z-index: 2147483647 !important;
-}
-
-
-/* ============================================================
-   WARNING BUBBLE
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning {
-  position: absolute !important;
-
-  left: 0 !important;
-  top: 0 !important;
-
-  width: 330px !important;
-  max-width: calc(100vw - 32px) !important;
-
+#onepace-realtime-warning .onepace-warning-backdrop {
+  position: static !important;
+  inset: auto !important;
+  width: auto !important;
+  height: auto !important;
   display: block !important;
+  background: transparent !important;
+  pointer-events: none !important;
+}
 
+/* ============================================================
+   WARNING BUBBLE (CARD)
+   ============================================================ */
+
+#onepace-realtime-warning .onepace-warning {
+  position: relative !important;
+  width: 400px !important;
+  max-width: 100% !important;
   margin: 0 !important;
   padding: 0 !important;
-
   overflow: visible !important;
-
   background: #ffffff !important;
-
-  border: 1px solid #e5e7eb !important;
-  border-radius: 12px !important;
-
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.14) !important;
-
-  color: #222222 !important;
-
-  font-family: inherit !important;
-
+  border: 1px solid #f0f0f0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08) !important;
+  color: #111111 !important;
   pointer-events: auto !important;
-
-  z-index: 2147483647 !important;
 }
 
-
 /* ============================================================
-   WARNING HEAD
+   WARNING HEAD (영국 비즈니스 문화 타이틀 바)
    ============================================================ */
 
-#onepace-realtime-warning
-.onepace-warning-head {
-  width: 100% !important;
-
+#onepace-realtime-warning .onepace-warning-head {
   display: flex !important;
-
+  justify-content: space-between !important;
   align-items: center !important;
-
-  gap: 7px !important;
-
   margin: 0 !important;
-  padding: 14px 16px 10px !important;
-
-  color: #222222 !important;
-
-  font-family: inherit !important;
-  font-size: 14px !important;
-  font-weight: 700 !important;
-  line-height: 1.3 !important;
+  padding: 16px 20px !important;
+  border-bottom: 1px solid #f0f0f0 !important;
 }
 
-
-/* ============================================================
-   WARNING MARK
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-mark {
-  width: 18px !important;
-  height: 18px !important;
-
-  min-width: 18px !important;
-
-  flex: 0 0 18px !important;
-
-  display: inline-flex !important;
-
+#onepace-realtime-warning .onepace-warning-head-title {
+  display: flex !important;
   align-items: center !important;
-  justify-content: center !important;
+  gap: 8px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: #111111 !important;
+}
 
-  border-radius: 50% !important;
+#onepace-realtime-warning .onepace-warning-flag {
+  font-size: 18px !important;
+}
 
-  background: #ff5b5b !important;
+#onepace-realtime-warning .onepace-warning-head-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
 
-  color: #ffffff !important;
+#onepace-realtime-warning .onepace-warning-country-time {
+  font-size: 12px !important;
+  color: #666666 !important;
+  font-weight: 500 !important;
+}
 
-  font-size: 9px !important;
+#onepace-realtime-warning .onepace-warning-close-btn {
+  background: none !important;
+  border: none !important;
+  font-size: 16px !important;
+  color: #9da3ae !important;
+  cursor: pointer !important;
+  padding: 0 !important;
   line-height: 1 !important;
 }
 
-
 /* ============================================================
-   WARNING BODY
+   WARNING BODY (태그 뱃지 및 컨텐츠)
    ============================================================ */
 
-#onepace-realtime-warning
-.onepace-warning-body {
-  width: 100% !important;
-
+#onepace-realtime-warning .onepace-warning-body {
+  padding: 20px !important;
   margin: 0 !important;
-  padding: 0 16px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
 }
 
-
-/* ============================================================
-   WARNING COPY
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-copy {
-  margin: 0 0 12px !important;
-  padding: 0 !important;
-
-  color: #666666 !important;
-
-  font-family: inherit !important;
+/* 배지 공통 스타일 */
+#onepace-realtime-warning .op-badge {
+  display: inline-block !important;
+  padding: 4px 10px !important;
+  border-radius: 12px !important;
   font-size: 12px !important;
-  line-height: 1.65 !important;
+  font-weight: 700 !important;
+  margin-bottom: 8px !important;
+}
 
-  white-space: normal !important;
+/* 1. 실시간 탐지 (주황 배지) */
+#onepace-realtime-warning .op-badge-orange {
+  background-color: #ffedd5 !important;
+  color: #ea580c !important;
+}
+
+#onepace-realtime-warning .onepace-warning-original {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+#onepace-realtime-warning .onepace-warning-original-text {
+  font-size: 13px !important;
+  color: #374151 !important;
+  line-height: 1.5 !important;
+}
+
+/* 2. 예상 뉘앙스 (보라 배지) */
+#onepace-realtime-warning .op-badge-purple {
+  background-color: #f3e8ff !important;
+  color: #6b21a8 !important;
+}
+
+#onepace-realtime-warning .onepace-warning-copy {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#onepace-realtime-warning .onepace-warning-reason {
+  margin: 0 !important;
+  font-size: 13px !important;
+  color: #374151 !important;
+  line-height: 1.55 !important;
   word-break: keep-all !important;
 }
 
-
-/* ============================================================
-   WARNING COUNTRY
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-country {
-  color: #333333 !important;
-
-  font-weight: 700 !important;
-}
-
-
-/* ============================================================
-   WARNING REASON
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-reason {
-  color: #555555 !important;
-
-  font-weight: 400 !important;
-}
-
-
-/* ============================================================
-   ORIGINAL TEXT
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-original {
-  width: 100% !important;
-
-  margin: 0 0 8px !important;
-  padding: 10px 11px !important;
-
-  border-radius: 8px !important;
-
-  background: #f5f6f7 !important;
-
-  color: #222222 !important;
-
-  font-family: inherit !important;
-  font-size: 12px !important;
-  line-height: 1.5 !important;
-
-  word-break: break-word !important;
-}
-
-
-/* ============================================================
-   ORIGINAL TEXT LABEL
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-original strong {
-  display: block !important;
-
-  margin: 0 0 3px !important;
-
-  color: #777777 !important;
-
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  line-height: 1.4 !important;
-}
-
-
-/* ============================================================
-   ORIGINAL TEXT VALUE
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-original-text {
-  display: block !important;
-
+/* 3. 수정 제안 (민트 박스 하이라이트) */
+#onepace-realtime-warning .onepace-warning-suggestion {
   margin: 0 !important;
-  padding: 0 !important;
+  padding: 14px 16px !important;
+  background-color: #d1fae5 !important;
+  border-radius: 12px !important;
+  border: none !important;
+}
 
-  color: #222222 !important;
+#onepace-realtime-warning .op-badge-mint {
+  background-color: #ffffff !important;
+  color: #0d9488 !important;
+  padding: 3px 10px !important;
+  border-radius: 12px !important;
+}
 
-  font-size: 12px !important;
+#onepace-realtime-warning .onepace-warning-suggestion-text {
+  font-size: 13px !important;
+  color: #0f766e !important;
   line-height: 1.5 !important;
-
-  white-space: pre-wrap !important;
-  overflow-wrap: anywhere !important;
+  word-break: keep-all !important;
 }
 
-
 /* ============================================================
-   SUGGESTION
+   WARNING ACTIONS (수락 / 무시 버튼)
    ============================================================ */
 
-#onepace-realtime-warning
-.onepace-warning-suggestion {
-  width: 100% !important;
-
-  margin: 0 !important;
-  padding: 10px 11px !important;
-
-  border: 1px solid #c9f1e9 !important;
-  border-radius: 8px !important;
-
-  background: #effcf9 !important;
-
-  color: #222222 !important;
-
-  font-family: inherit !important;
-  font-size: 12px !important;
-  line-height: 1.5 !important;
-
-  word-break: break-word !important;
-}
-
-
-/* ============================================================
-   SUGGESTION LABEL
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-suggestion strong {
-  display: block !important;
-
-  margin: 0 0 3px !important;
-
-  color: #00a990 !important;
-
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  line-height: 1.4 !important;
-}
-
-
-/* ============================================================
-   SUGGESTION TEXT
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-suggestion-text {
-  display: block !important;
-
-  margin: 0 !important;
-  padding: 0 !important;
-
-  color: #222222 !important;
-
-  font-size: 12px !important;
-  line-height: 1.5 !important;
-
-  white-space: pre-wrap !important;
-  overflow-wrap: anywhere !important;
-}
-
-
-/* ============================================================
-   WARNING ACTIONS
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-actions {
-  width: 100% !important;
-
+#onepace-realtime-warning .onepace-warning-actions {
   display: flex !important;
-
-  gap: 8px !important;
-
+  gap: 10px !important;
   margin: 0 !important;
-  padding: 12px 16px 14px !important;
-
-  border-top: 1px solid #eeeeee !important;
-
-  background: #ffffff !important;
+  padding: 0 20px 20px 20px !important;
+  border-top: none !important;
 }
 
-
-/* ============================================================
-   WARNING BUTTON COMMON
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-warning-actions button {
+#onepace-realtime-warning .onepace-warning-actions button {
   flex: 1 1 0 !important;
-
   width: auto !important;
-  height: 34px !important;
-
+  height: 42px !important;
   min-width: 0 !important;
-
-  display: flex !important;
-
-  align-items: center !important;
-  justify-content: center !important;
-
   margin: 0 !important;
-  padding: 0 10px !important;
-
-  border-radius: 7px !important;
-
+  padding: 0 12px !important;
+  border-radius: 8px !important;
   font-family: inherit !important;
-  font-size: 12px !important;
-  font-weight: 700 !important;
-
+  font-size: 13px !important;
+  font-weight: 600 !important;
   line-height: 1 !important;
-
   cursor: pointer !important;
-
   appearance: none !important;
-
-  outline: none !important;
+  transition: all 0.15s ease !important;
 }
 
-
-/* ============================================================
-   SEND ANYWAY
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-send-anyway {
-  border: 1px solid #dddddd !important;
-
-  background: #ffffff !important;
-
-  color: #555555 !important;
-}
-
-
-#onepace-realtime-warning
-.onepace-send-anyway:hover {
-  background: #f5f5f5 !important;
-}
-
-
-/* ============================================================
-   USE SUGGESTION
-   ============================================================ */
-
-#onepace-realtime-warning
-.onepace-use-suggestion {
-  border: 0 !important;
-
-  background: #00bfa5 !important;
-
+/* Accept (수락 버튼 - 민트) */
+#onepace-realtime-warning .onepace-use-suggestion {
+  border: none !important;
+  background: #14b8a6 !important;
   color: #ffffff !important;
 }
 
-
-#onepace-realtime-warning
-.onepace-use-suggestion:hover {
-  background: #00ad96 !important;
+#onepace-realtime-warning .onepace-use-suggestion:hover {
+  background: #0d9488 !important;
 }
 
+/* Dismiss (무시 버튼 - 회색) */
+#onepace-realtime-warning .onepace-send-anyway {
+  border: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+  color: #666666 !important;
+}
+
+#onepace-realtime-warning .onepace-send-anyway:hover {
+  background: #f9fafb !important;
+  color: #333333 !important;
+}
 
 /* ============================================================
-   WARNING BACKDROP CLICK
+   SPEECH BUBBLE TAIL (말풍선 꼬리)
    ============================================================ */
 
-#onepace-realtime-warning
-.onepace-warning-backdrop {
-  pointer-events: none !important;
+#onepace-realtime-warning .onepace-warning::after {
+  content: "" !important;
+  position: absolute !important;
+  left: 24px !important;
+  bottom: -7px !important;
+  width: 12px !important;
+  height: 12px !important;
+  background: #ffffff !important;
+  border-right: 1px solid #f0f0f0 !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  transform: rotate(45deg) !important;
+  z-index: 1 !important;
 }
 
+/* ============================================================
+   DETECTED EXPRESSION
+   ============================================================ */
 
-#onepace-realtime-warning
-.onepace-warning {
-  pointer-events: auto !important;
+.onepace-input-overlay .op-detected-expression,
+#onepace-input-highlight .op-underlined-expression,
+.op-detected-expression {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  box-sizing: border-box;
+  background: transparent;
+  box-shadow: none;
+  border-bottom: 1px wavy #ff4d67 !important;
 }
-
 
 /* ============================================================
    ACCESSIBILITY
    ============================================================ */
 
-#onepace-global-root
-.onepace-globe-button:focus-visible,
-
-#onepace-global-root
-.onepace-country-search:focus-visible,
-
-#onepace-global-root
-.onepace-country-close:focus-visible,
-
-#onepace-global-root
-.onepace-country-list
-.onepace-country-item:focus-visible,
-
-#onepace-realtime-warning
-.onepace-warning-actions
-button:focus-visible {
-  outline: 2px solid #00bfa5 !important;
-
+#onepace-global-root .onepace-globe-button:focus-visible,
+#onepace-global-root .onepace-country-search:focus-visible,
+#onepace-global-root .onepace-country-close:focus-visible,
+#onepace-global-root .onepace-country-list button:focus-visible,
+#onepace-realtime-warning .onepace-warning-actions button:focus-visible {
+  outline: 2px solid #14b8a6 !important;
   outline-offset: 2px !important;
+}
+
+/* ============================================================
+   COUNTRY LIST FLAG STYLES (국기 아이콘 정렬)
+   ============================================================ */
+
+/* 팝업 리스트 내 버튼 정렬 */
+#onepace-global-root .onepace-country-list button {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+/* 팝업 리스트 내 국기 크기 */
+#onepace-global-root .onepace-country-list .onepace-country-flag {
+  font-size: 16px !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+}
+
+/* 팝업 리스트 내 국가 이름 */
+#onepace-global-root .onepace-country-list .onepace-country-name {
+  font-size: 12px !important;
+  color: #333333 !important;
+}
+
+/* 경고창 헤더 국기 크기 및 정렬 */
+#onepace-realtime-warning .onepace-warning-flag {
+  font-size: 18px !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
 }

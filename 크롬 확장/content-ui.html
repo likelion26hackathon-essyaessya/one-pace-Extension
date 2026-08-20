@@ -1,12 +1,8 @@
 <!-- ============================================================
      ONEPACE Content UI
      ============================================================ -->
-
-
 <template id="onepace-composer-template">
-
   <div class="op-row">
-
     <button
       type="button"
       class="onepace-globe-button"
@@ -16,174 +12,93 @@
       🌐
     </button>
 
-
     <div class="onepace-country-status">
-
-      <span
-        class="onepace-status-country"
-      ></span>
-
-      <span>
-        팀원과 대화하는 중이에요.
-      </span>
-
-      <span
-        class="onepace-status-time"
-      ></span>
-
+      <span class="onepace-status-country"></span>
+      <span> 팀원과 대화하는 중이에요. </span>
+      <span class="onepace-status-time"></span>
     </div>
 
-
     <div class="onepace-country-popup">
-
-      <div class="onepace-country-title">
-        국가
-      </div>
-
+      <div class="onepace-country-title">국가</div>
 
       <div class="onepace-country-search-wrap">
-
-        <span class="onepace-search-icon">
-          ⌕
-        </span>
-
+        <span class="onepace-search-icon">⌕</span>
         <input
           class="onepace-country-search"
           type="text"
           placeholder="검색"
           autocomplete="off"
         />
-
       </div>
 
-
-      <div class="onepace-country-list"></div>
-
+      <!-- 나라 선택 리스트: 각 항목 내 국기 아이콘 + 나라명 구조 -->
+      <div class="onepace-country-list">
+        <!-- JS로 동적 생성 시 아래 구조로 버튼이 들어가게 됩니다 -->
+        <!-- 
+        <button type="button">
+          <span class="onepace-country-flag">🇬🇧</span>
+          <span class="onepace-country-name">영국</span>
+        </button> 
+        -->
+      </div>
 
       <div class="onepace-country-footer">
-
-        <button
-          type="button"
-          class="onepace-country-close"
-        >
-          닫기
-        </button>
-
+        <button type="button" class="onepace-country-close">닫기</button>
       </div>
-
     </div>
-
   </div>
-
 </template>
-
-
 
 <!-- ============================================================
      오해 경고창
      ============================================================ -->
-
 <template id="onepace-warning-template">
-
-  <div
-    class="onepace-warning-backdrop"
-  >
-
-    <div
-      class="onepace-warning"
-      role="dialog"
-      aria-modal="true"
-    >
-
+  <div class="onepace-warning-backdrop">
+    <div class="onepace-warning" role="dialog" aria-modal="true">
+      
+      <!-- 상단 헤더 -->
       <div class="onepace-warning-head">
-
-        <span
-          class="onepace-warning-mark"
-        >
-          ●
-        </span>
-
-        오해 가능성이 있어요
-
+        <div class="onepace-warning-head-title">
+          <!-- 동적 국기 아이콘 바인딩 위치 -->
+          <span class="onepace-warning-flag"></span>
+          <strong class="onepace-warning-title-text">UK Business Culture</strong>
+        </div>
+        <div class="onepace-warning-head-right">
+          <span class="onepace-warning-country-time">⏰ 런던 20:09(퇴근 후)</span>
+          <button type="button" class="onepace-warning-close-btn" aria-label="닫기">✕</button>
+        </div>
       </div>
 
-
+      <!-- 본문 영역 -->
       <div class="onepace-warning-body">
-
-        <p
-          class="onepace-warning-copy"
-        >
-          <span
-            class="onepace-warning-country"
-          ></span>
-          에게 보낼 메시지를 ONE PACE가 확인했어요.
-          <br>
-
-          <span
-            class="onepace-warning-reason"
-          ></span>
-        </p>
-
-
-        <div
-          class="onepace-warning-original"
-        >
-
-          <strong>
-            현재 표현
-          </strong>
-
-          <br>
-
-          <span
-            class="onepace-warning-original-text"
-          ></span>
-
+        
+        <!-- 1. 실시간 탐지 -->
+        <div class="onepace-warning-original">
+          <span class="op-badge op-badge-orange">실시간 탐지</span>
+          <div class="onepace-warning-original-text"></div>
         </div>
 
+        <!-- 2. 예상 뉘앙스 -->
+        <div class="onepace-warning-copy">
+          <span class="op-badge op-badge-purple">예상 뉘앙스</span>
+          <span class="onepace-warning-country" style="display: none;"></span>
+          <p class="onepace-warning-reason"></p>
+        </div>
 
-        <div
-          class="onepace-warning-suggestion"
-        >
-
-          <strong>
-            추천 표현
-          </strong>
-
-          <br>
-
-          <span
-            class="onepace-warning-suggestion-text"
-          ></span>
-
+        <!-- 3. 수정 제안 -->
+        <div class="onepace-warning-suggestion">
+          <span class="op-badge op-badge-mint">💡 수정 제안</span>
+          <div class="onepace-warning-suggestion-text"></div>
         </div>
 
       </div>
 
-
-      <div
-        class="onepace-warning-actions"
-      >
-
-        <button
-          type="button"
-          class="onepace-send-anyway"
-        >
-          그대로 전송
-        </button>
-
-
-        <button
-          type="button"
-          class="onepace-use-suggestion"
-        >
-          수정해서 전송
-        </button>
-
+      <!-- 하단 버튼 영역 -->
+      <div class="onepace-warning-actions">
+        <button type="button" class="onepace-use-suggestion">Accept(수락)</button>
+        <button type="button" class="onepace-send-anyway">Dismiss(무시)</button>
       </div>
 
     </div>
-
   </div>
-
 </template>

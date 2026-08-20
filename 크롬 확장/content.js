@@ -2,30 +2,10 @@
   'use strict';
 
   // ============================================================
-  // ONE PACE CONTENT SCRIPT
-  //
-  // content-ui.html + content.css 기준
-  //
-  // 역할
-  // 1. 상대 국가 선택
-  // 2. 국가 상태 표시
-  // 3. 입력값 실시간 분석
-  // 4. API riskDetected 처리
-  // 5. 오해 가능성 말풍선 표시
-  // 6. 추천 표현 적용
-  //
-  // API
-  // https://api.onepace.site/api/culture-translation/analyze
+  // 기본 중복 실행 방지
   // ============================================================
 
-
-  // ============================================================
-  // 중복 실행 방지
-  // ============================================================
-
-  if (window.top !== window.self) {
-    return;
-  }
+  if (window.top !== window.self) return;
 
   if (
     document.documentElement.dataset.onepaceLoaded === 'true'
@@ -35,26 +15,18 @@
 
   document.documentElement.dataset.onepaceLoaded = 'true';
 
-
   // ============================================================
-  // 설정
+  // 기본 설정
   // ============================================================
 
   const ROOT_ID = 'onepace-global-root';
   const WARNING_ID = 'onepace-realtime-warning';
-
-  const COMPOSER_TEMPLATE_ID =
-    'onepace-composer-template';
-
-  const WARNING_TEMPLATE_ID =
-    'onepace-warning-template';
-
-  const UI_FILE =
-    'content-ui.html';
+  const COMPOSER_TEMPLATE_ID = 'onepace-composer-template';
+  const WARNING_TEMPLATE_ID = 'onepace-warning-template';
+  const UI_FILE = 'content-ui.html';
 
   const ANALYZE_ENDPOINT =
     'https://api.onepace.site/api/culture-translation/analyze';
-
 
   // ============================================================
   // 국가 데이터
@@ -203,116 +175,95 @@
     }
   ];
 
-
   // ============================================================
   // 상태
   // ============================================================
 
   let enabled = true;
-
   let selectedCountry = null;
-
   let activeComposer = null;
-
   let composerRoot = null;
 
   let analysisTimer = null;
-
   let latestRequestKey = '';
-
   let lastAnalysisKey = '';
 
   let templateLoaded = false;
-
   let templateLoadingPromise = null;
 
+  let suppressedText = '';
+  let currentAnalysis = null;
+
+  let currentOverlay = null;
+
+  let currentDetectedExpression = '';
+  let activeDetectedExpression = '';
 
   // ============================================================
-  // HTML Escape
+  // 유틸
   // ============================================================
 
   function escapeHtml(value) {
     return String(value ?? '').replace(
       /[&<>'"]/g,
-      (character) => {
-        const map = {
+      character =>
+        ({
           '&': '&amp;',
           '<': '&lt;',
           '>': '&gt;',
           "'": '&#39;',
           '"': '&quot;'
-        };
-
-        return map[character];
-      }
+        })[character]
     );
   }
 
-
-  // ============================================================
-  // 입력값 읽기
-  // ============================================================
-
   function getText(element) {
-    if (!element) {
-      return '';
-    }
+    if (!element) return '';
 
     if (element.isContentEditable) {
-      return (
-        element.innerText ||
-        element.textContent ||
-        ''
-      );
+      return element.innerText || element.textContent || '';
     }
 
     return element.value || '';
   }
 
-
-  // ============================================================
-  // 입력값 변경
-  // ============================================================
-
   function setText(element, text) {
-    if (!element) {
-      return;
-    }
+    if (!element) return;
 
     const value = String(text ?? '');
 
     if (element.isContentEditable) {
-      element.focus();
-
       element.textContent = value;
 
-      element.dispatchEvent(
-        new InputEvent('input', {
-          bubbles: true,
-          inputType: 'insertText',
-          data: value
-        })
-      );
+      try {
+        element.dispatchEvent(
+          new InputEvent('input', {
+            bubbles: true,
+            inputType: 'insertText',
+            data: value
+          })
+        );
+      } catch {
+        element.dispatchEvent(
+          new Event('input', {
+            bubbles: true
+          })
+        );
+      }
 
       return;
     }
 
-    element.focus();
+    const prototype = Object.getPrototypeOf(element);
 
-    const prototype =
-      Object.getPrototypeOf(element);
-
-    const valueSetter =
+    const descriptor =
       Object.getOwnPropertyDescriptor(
         prototype,
         'value'
-      )?.set;
-
-    if (valueSetter) {
-      valueSetter.call(
-        element,
-        value
       );
+
+    if (descriptor?.set) {
+      descriptor.set.call(element, value);
     } else {
       element.value = value;
     }
@@ -330,34 +281,24 @@
     );
   }
 
-
-  // ============================================================
-  // 현지 시간
-  // ============================================================
-
   function getLocalTime(timezone) {
     try {
-      return new Intl.DateTimeFormat(
-        'ko-KR',
-        {
-          timeZone: timezone,
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }
-      ).format(new Date());
+      return new Intl.DateTimeFormat('ko-KR', {
+        timeZone: timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).format(new Date());
     } catch {
       return '--:--';
     }
   }
 
-
   // ============================================================
-  // Composer 찾기
+  // Composer 탐색
   // ============================================================
 
   function findComposer() {
-
     const selectors = [
       '#messageInput',
       '#input',
@@ -369,33 +310,16 @@
       'textarea'
     ];
 
-
     for (const selector of selectors) {
-
       const elements =
         document.querySelectorAll(selector);
 
-
       for (const element of elements) {
-
-        if (!element) {
-          continue;
-        }
-
-        if (
-          element.closest('#onepace-global-root') ||
-          element.closest('#onepace-realtime-warning')
-        ) {
-          continue;
-        }
-
-
         const rect =
           element.getBoundingClientRect();
 
         const style =
           getComputedStyle(element);
-
 
         if (
           rect.width > 80 &&
@@ -405,50 +329,33 @@
         ) {
           return element;
         }
-
       }
-
     }
 
     return null;
   }
 
-
-  // ============================================================
-  // Composer Container
-  // ============================================================
-
   function findComposerContainer(input) {
+    if (!input) return null;
 
-    if (!input) {
-      return null;
-    }
-
-
-    const container =
+    return (
       input.closest(
         '[data-onepace-composer-container]'
       ) ||
       input.closest('.composer') ||
       input.closest('.composer-wrap') ||
-      input.closest('[data-qa="message_input_container"]');
-
-
-    if (container) {
-      return container;
-    }
-
-
-    return input.parentElement;
+      input.closest(
+        '[data-qa="message_input_container"]'
+      ) ||
+      input.parentElement
+    );
   }
 
-
   // ============================================================
-  // Template 확인
+  // Template
   // ============================================================
 
   function templatesExist() {
-
     return Boolean(
       document.getElementById(
         COMPOSER_TEMPLATE_ID
@@ -459,249 +366,147 @@
     );
   }
 
-
-  // ============================================================
-  // content-ui.html 로드
-  // ============================================================
-
   async function ensureTemplates() {
-
     if (templatesExist()) {
-
       templateLoaded = true;
-
       return true;
     }
 
-
-    if (templateLoaded) {
-      return true;
-    }
-
+    if (templateLoaded) return true;
 
     if (templateLoadingPromise) {
       return templateLoadingPromise;
     }
 
+    templateLoadingPromise = (async () => {
+      try {
+        const resourceUrl =
+          chrome.runtime.getURL(UI_FILE);
 
-    templateLoadingPromise =
-      (async () => {
+        const response =
+          await fetch(resourceUrl);
 
-        try {
-
-          const resourceUrl =
-            chrome.runtime.getURL(UI_FILE);
-
-
-          console.log(
-            '[ONEPACE] UI template loading:',
-            resourceUrl
+        if (!response.ok) {
+          throw new Error(
+            `UI template HTTP ${response.status}`
           );
+        }
 
+        const html =
+          await response.text();
 
-          const response =
-            await fetch(resourceUrl);
+        const wrapper =
+          document.createElement('div');
 
+        wrapper.innerHTML = html;
 
-          if (!response.ok) {
-
-            throw new Error(
-              `UI template HTTP ${response.status}`
-            );
-
-          }
-
-
-          const html =
-            await response.text();
-
-
-          const wrapper =
-            document.createElement('div');
-
-
-          wrapper.innerHTML = html;
-
-
-          const templates =
-            wrapper.querySelectorAll('template');
-
-
-          templates.forEach((template) => {
-
+        wrapper
+          .querySelectorAll('template')
+          .forEach(template => {
             document.body.appendChild(
               template.cloneNode(true)
             );
-
           });
 
-
-          if (!templatesExist()) {
-
-            throw new Error(
-              'ONEPACE template을 찾을 수 없습니다.'
-            );
-
-          }
-
-
-          templateLoaded = true;
-
-
-          console.log(
-            '[ONEPACE] UI template loaded'
+        if (!templatesExist()) {
+          throw new Error(
+            'ONEPACE template을 찾을 수 없습니다.'
           );
-
-
-          return true;
-
-        } catch (error) {
-
-          console.error(
-            '[ONEPACE] UI template 로드 실패:',
-            error
-          );
-
-          return false;
-
         }
 
-      })();
+        templateLoaded = true;
 
+        return true;
+      } catch (error) {
+        console.error(
+          '[ONEPACE] UI template 로드 실패:',
+          error
+        );
+
+        return false;
+      }
+    })();
 
     try {
-
       return await templateLoadingPromise;
-
     } finally {
-
       templateLoadingPromise = null;
-
     }
   }
 
-
   // ============================================================
-  // Composer UI 생성
+  // Composer UI
   // ============================================================
 
   async function createComposerUI(input) {
-
-    if (!input) {
-      return null;
-    }
-
+    if (!input) return null;
 
     const container =
       findComposerContainer(input);
 
+    if (!container) return null;
 
-    if (!container) {
-      return null;
-    }
-
-
-    let existing =
+    const existing =
       container.querySelector(
         `#${ROOT_ID}`
       );
 
-
     if (existing) {
-
       composerRoot = existing;
-
       return existing;
     }
-
 
     const loaded =
       await ensureTemplates();
 
-
-    if (!loaded) {
-      return null;
-    }
-
+    if (!loaded) return null;
 
     const template =
       document.getElementById(
         COMPOSER_TEMPLATE_ID
       );
 
-
-    if (!template) {
-      return null;
-    }
-
+    if (!template) return null;
 
     const root =
       document.createElement('div');
 
-
     root.id = ROOT_ID;
 
-
-    const fragment =
-      template.content.cloneNode(true);
-
-
-    root.appendChild(fragment);
-
+    root.appendChild(
+      template.content.cloneNode(true)
+    );
 
     const computed =
       getComputedStyle(container);
 
-
-    if (
-      computed.position === 'static'
-    ) {
+    if (computed.position === 'static') {
       container.style.position = 'relative';
     }
 
-
-    if (
-      computed.overflow === 'hidden'
-    ) {
+    if (computed.overflow === 'hidden') {
       container.style.overflow = 'visible';
     }
 
-
-    // 입력창 위에 삽입
     container.insertBefore(
       root,
       input
     );
 
-
     composerRoot = root;
 
-
     bindCountryUI(root);
-
-
     updateCountryStatus();
-
-
-    console.log(
-      '[ONEPACE] Composer UI created'
-    );
-
 
     return root;
   }
-
 
   // ============================================================
   // 국가 UI
   // ============================================================
 
   function bindCountryUI(root) {
-
-    if (!root) {
-      return;
-    }
-
+    if (!root) return;
 
     if (
       root.dataset.onepaceBound === 'true'
@@ -709,9 +514,7 @@
       return;
     }
 
-
     root.dataset.onepaceBound = 'true';
-
 
     const button =
       root.querySelector(
@@ -753,7 +556,6 @@
         '.onepace-country-close'
       );
 
-
     if (
       !button ||
       !status ||
@@ -764,7 +566,6 @@
       !list ||
       !close
     ) {
-
       console.error(
         '[ONEPACE] Country UI element 누락'
       );
@@ -772,35 +573,23 @@
       return;
     }
 
-
     function renderCountryList(query = '') {
-
       const normalizedQuery =
         String(query)
           .trim()
           .toLowerCase();
 
-
       const filtered =
-        COUNTRIES.filter(
-          (country) => {
-
-            return (
-              country.name
-                .toLowerCase()
-                .includes(normalizedQuery) ||
-
-              country.nationality
-                .toLowerCase()
-                .includes(normalizedQuery)
-            );
-
-          }
+        COUNTRIES.filter(country =>
+          country.name
+            .toLowerCase()
+            .includes(normalizedQuery) ||
+          country.nationality
+            .toLowerCase()
+            .includes(normalizedQuery)
         );
 
-
       if (!filtered.length) {
-
         list.innerHTML = `
           <div class="onepace-country-empty">
             검색 결과가 없습니다.
@@ -810,192 +599,151 @@
         return;
       }
 
-
       list.innerHTML =
         filtered
-          .map((country) => {
-
+          .map(country => {
             const selected =
               selectedCountry?.code ===
               country.code;
 
-
             return `
               <button
                 type="button"
-                class="onepace-country-item ${selected ? 'selected' : ''}"
-                data-country-code="${escapeHtml(country.code)}"
+                class="onepace-country-item ${
+                  selected ? 'selected' : ''
+                }"
+                data-country-code="${escapeHtml(
+                  country.code
+                )}"
               >
                 <span class="onepace-country-flag">
                   ${country.flag}
                 </span>
 
                 <span class="onepace-country-name">
-                  ${escapeHtml(country.nationality)}
+                  ${escapeHtml(
+                    country.nationality
+                  )}
                 </span>
               </button>
             `;
-
           })
           .join('');
-
 
       list
         .querySelectorAll(
           '.onepace-country-item'
         )
-        .forEach((item) => {
-
+        .forEach(item => {
           item.addEventListener(
             'click',
-            (event) => {
-
+            event => {
               event.preventDefault();
               event.stopPropagation();
-
 
               const code =
                 item.dataset.countryCode;
 
-
               selectedCountry =
                 COUNTRIES.find(
-                  (country) =>
+                  country =>
                     country.code === code
                 ) || null;
 
-
-              search.value = '';
-
-
-              renderCountryList();
-
+              renderCountryList(
+                search.value
+              );
 
               updateCountryStatus();
 
+              search.value = '';
+
+              popup.classList.remove('open');
+              button.classList.remove('open');
 
               lastAnalysisKey = '';
+              latestRequestKey = '';
+              suppressedText = '';
 
+              currentAnalysis = null;
+              currentDetectedExpression = '';
+              activeDetectedExpression = '';
+
+              removeWarning();
+              removeHighlight();
 
               analyzeCurrentInput();
-
             }
           );
-
         });
-
     }
-
 
     button.addEventListener(
       'click',
-      (event) => {
-
+      event => {
         event.preventDefault();
         event.stopPropagation();
-
 
         const isOpen =
           popup.classList.contains('open');
 
-
         if (isOpen) {
-
           popup.classList.remove('open');
           button.classList.remove('open');
-
           return;
         }
 
-
         renderCountryList();
 
-
         search.value = '';
-
 
         popup.classList.add('open');
         button.classList.add('open');
 
-
         setTimeout(() => {
           search.focus();
         }, 0);
-
       }
     );
-
 
     search.addEventListener(
       'input',
       () => {
-
         renderCountryList(
           search.value
         );
-
       }
     );
-
 
     close.addEventListener(
       'click',
-      (event) => {
-
+      event => {
         event.preventDefault();
         event.stopPropagation();
 
-
         popup.classList.remove('open');
         button.classList.remove('open');
-
-
-        updateCountryStatus();
-
-
-        lastAnalysisKey = '';
-
-
-        analyzeCurrentInput();
-
       }
     );
 
-
     document.addEventListener(
       'click',
-      (event) => {
-
-        if (
-          root.contains(event.target)
-        ) {
+      event => {
+        if (root.contains(event.target)) {
           return;
         }
 
-
         popup.classList.remove('open');
         button.classList.remove('open');
-
       },
       true
     );
 
-
     renderCountryList();
-
   }
 
-
-  // ============================================================
-  // 국가 상태 업데이트
-  // ============================================================
-
   function updateCountryStatus() {
-
-    if (!composerRoot) {
-      return;
-    }
-
+    if (!composerRoot) return;
 
     const status =
       composerRoot.querySelector(
@@ -1012,7 +760,6 @@
         '.onepace-status-time'
       );
 
-
     if (
       !status ||
       !statusCountry ||
@@ -1021,88 +768,40 @@
       return;
     }
 
-
     if (!selectedCountry) {
-
       status.classList.remove('show');
-
       statusCountry.textContent = '';
       statusTime.textContent = '';
-
       return;
     }
 
-
     statusCountry.textContent =
       selectedCountry.nationality;
-
 
     statusTime.textContent =
       `(현지 시각 ${getLocalTime(
         selectedCountry.timezone
       )})`;
 
-
     status.classList.add('show');
-
   }
 
-
   // ============================================================
-  // API 분석
+  // API
   // ============================================================
 
   async function analyzeMessage(
     message,
     country
   ) {
-
-    const cleanMessage =
-      String(message ?? '').trim();
-
-
-    console.log(
-      '[ONEPACE] API 요청 시작'
-    );
-
-    console.log(
-      '[ONEPACE] text:',
-      cleanMessage
-    );
-
-    console.log(
-      '[ONEPACE] country:',
-      country?.code
-    );
-
-
-    if (
-      !cleanMessage ||
-      !country
-    ) {
-
+    if (!message || !country) {
       return {
         risky: false,
         country
       };
-
     }
 
-
     try {
-
-      const requestBody = {
-        text: cleanMessage,
-        counterpartCountry: country.code
-      };
-
-
-      console.log(
-        '[ONEPACE] API request body:',
-        requestBody
-      );
-
-
       const response =
         await fetch(
           ANALYZE_ENDPOINT,
@@ -1114,53 +813,43 @@
                 'application/json'
             },
 
-            body:
-              JSON.stringify(
-                requestBody
-              )
+            body: JSON.stringify({
+              text: message,
+              counterpartCountry:
+                country.code
+            })
           }
         );
 
-
-      console.log(
-        '[ONEPACE] API status:',
-        response.status
-      );
-
-
       if (!response.ok) {
+        const errorText =
+          await response
+            .text()
+            .catch(() => '');
 
-        console.warn(
-          '[ONEPACE] 분석 API 응답 오류:',
-          response.status
+        console.error(
+          '[ONEPACE] API 응답 오류:',
+          response.status,
+          errorText
         );
-
 
         return {
           risky: false,
           country
         };
-
       }
-
 
       const data =
         await response.json();
-
 
       console.log(
         '[ONEPACE] API response:',
         data
       );
 
-
-      const risky =
-        data?.riskDetected === true;
-
-
       return {
-
-        risky,
+        risky:
+          data?.riskDetected === true,
 
         country,
 
@@ -1176,41 +865,543 @@
         suggestedText:
           data?.suggestedText || '',
 
-        raw:
-          data
-
+        raw: data
       };
-
-
     } catch (error) {
-
       console.error(
         '[ONEPACE] API 호출 실패:',
         error
       );
-
 
       return {
         risky: false,
         country,
         error
       };
-
     }
   }
 
-
   // ============================================================
-  // 경고창 표시
-  //
-  // 중요:
-  // content-ui.html의 클래스명을 그대로 사용한다.
+  // 문자열 정규화
   // ============================================================
 
-  async function showWarning(
+  function normalizeForMatch(text) {
+    const original =
+      String(text ?? '');
+
+    let normalized = '';
+    const positionMap = [];
+
+    for (
+      let i = 0;
+      i < original.length;
+      i++
+    ) {
+      const char = original[i];
+
+      if (
+        /[\p{L}\p{N}]/u.test(char)
+      ) {
+        normalized +=
+          char.toLowerCase();
+
+        positionMap.push(i);
+      }
+    }
+
+    return {
+      normalized,
+      positionMap
+    };
+  }
+
+  // ============================================================
+  // detectedExpression 실제 입력 위치 찾기
+  // ============================================================
+
+  function findDetectedExpressionRange(
+    fullText,
+    detectedExpression
+  ) {
+    const original =
+      String(fullText ?? '');
+
+    const target =
+      String(
+        detectedExpression ?? ''
+      ).trim();
+
+    if (!original || !target) {
+      return null;
+    }
+
+    // ----------------------------------------------------------
+    // 1. 완전 일치
+    // ----------------------------------------------------------
+
+    const exactIndex =
+      original
+        .toLowerCase()
+        .indexOf(
+          target.toLowerCase()
+        );
+
+    if (exactIndex !== -1) {
+      return {
+        start: exactIndex,
+        end:
+          exactIndex +
+          target.length
+      };
+    }
+
+    // ----------------------------------------------------------
+    // 2. 정규화 비교
+    // ----------------------------------------------------------
+
+    const textData =
+      normalizeForMatch(original);
+
+    const targetData =
+      normalizeForMatch(target);
+
+    const normalizedText =
+      textData.normalized;
+
+    const normalizedTarget =
+      targetData.normalized;
+
+    if (
+      !normalizedText ||
+      !normalizedTarget
+    ) {
+      return null;
+    }
+
+    const normalizedIndex =
+      normalizedText.indexOf(
+        normalizedTarget
+      );
+
+    if (normalizedIndex === -1) {
+      return null;
+    }
+
+    const normalizedStart =
+      normalizedIndex;
+
+    const normalizedEnd =
+      normalizedIndex +
+      normalizedTarget.length -
+      1;
+
+    const start =
+      textData.positionMap[
+        normalizedStart
+      ];
+
+    const lastCharacterIndex =
+      textData.positionMap[
+        normalizedEnd
+      ];
+
+    if (
+      start === undefined ||
+      lastCharacterIndex === undefined
+    ) {
+      return null;
+    }
+
+    return {
+      start,
+      end:
+        lastCharacterIndex + 1
+    };
+  }
+
+  // ============================================================
+  // Highlight Overlay
+  // ============================================================
+
+  function createHighlightOverlay(
+    input,
+    range
+  ) {
+    removeHighlight();
+
+    if (!input || !range) {
+      return null;
+    }
+
+    const text =
+      getText(input);
+
+    if (!text) {
+      return null;
+    }
+
+    const overlay =
+      document.createElement('div');
+
+    overlay.className =
+      'onepace-input-overlay';
+
+    overlay.dataset.onepaceOverlay =
+      'true';
+
+    const inputRect =
+      input.getBoundingClientRect();
+
+    const parent =
+      input.offsetParent ||
+      input.parentElement ||
+      document.body;
+
+    const parentRect =
+      parent.getBoundingClientRect();
+
+    const style =
+      getComputedStyle(input);
+
+    // ----------------------------------------------------------
+    // Overlay
+    // ----------------------------------------------------------
+
+    overlay.style.position =
+      'absolute';
+
+    overlay.style.left =
+      `${inputRect.left - parentRect.left}px`;
+
+    overlay.style.top =
+      `${inputRect.top - parentRect.top}px`;
+
+    overlay.style.width =
+      `${inputRect.width}px`;
+
+    overlay.style.height =
+      `${inputRect.height}px`;
+
+    overlay.style.padding =
+      style.padding;
+
+    overlay.style.margin =
+      '0';
+
+    overlay.style.border =
+      '0';
+
+    overlay.style.boxSizing =
+      'border-box';
+
+    overlay.style.background =
+      'transparent';
+
+    overlay.style.overflow =
+      'hidden';
+
+    overlay.style.pointerEvents =
+      'none';
+
+    overlay.style.zIndex =
+      '10';
+
+    overlay.style.color =
+      'transparent';
+
+    overlay.style.transform =
+      `translate(${-input.scrollLeft}px, ${-input.scrollTop}px)`;
+
+    // ----------------------------------------------------------
+    // 위험 표현 위치 계산
+    // ----------------------------------------------------------
+
+    const beforeText =
+      text.slice(
+        0,
+        range.start
+      );
+
+    const detectedText =
+      text.slice(
+        range.start,
+        range.end
+      );
+
+    const canvas =
+      document.createElement('canvas');
+
+    const context =
+      canvas.getContext('2d');
+
+    if (!context) {
+      return null;
+    }
+
+    context.font =
+      style.font ||
+      `${style.fontSize} ${style.fontFamily}`;
+
+    const lines =
+      beforeText.split('\n');
+
+    const currentLine =
+      lines[lines.length - 1] || '';
+
+    const lineIndex =
+      lines.length - 1;
+
+    const lineHeight =
+      parseFloat(style.lineHeight) ||
+      parseFloat(style.fontSize) * 1.4;
+
+    const paddingLeft =
+      parseFloat(style.paddingLeft) || 0;
+
+    const paddingTop =
+      parseFloat(style.paddingTop) || 0;
+
+    const beforeWidth =
+      context.measureText(
+        currentLine
+      ).width;
+
+    const detectedWidth =
+      context.measureText(
+        detectedText
+      ).width;
+
+    // ----------------------------------------------------------
+    // 빨간 밑줄
+    // ----------------------------------------------------------
+
+    const underline =
+      document.createElement('div');
+
+    underline.className =
+      'op-detected-expression';
+
+    underline.dataset.expression =
+      detectedText;
+
+    underline.style.position =
+      'absolute';
+
+    underline.style.left =
+      `${paddingLeft + beforeWidth}px`;
+
+    underline.style.top =
+      `${paddingTop + lineIndex * lineHeight}px`;
+
+    underline.style.width =
+      `${Math.max(detectedWidth, 4)}px`;
+
+    underline.style.height =
+      `${lineHeight}px`;
+
+    underline.style.background =
+      'transparent';
+
+    underline.style.boxSizing =
+      'border-box';
+
+    underline.style.borderRadius =
+      '2px';
+
+    underline.style.pointerEvents =
+      'auto';
+
+    underline.style.cursor =
+      'pointer';
+
+    underline.style.zIndex =
+      '20';
+
+    // ★ 빨간색 밑줄
+    underline.style.boxShadow =
+      'inset 0 -2px 0 #ff4d67';
+
+    // ----------------------------------------------------------
+    // Hover
+    // ----------------------------------------------------------
+
+    underline.addEventListener(
+      'mouseenter',
+      () => {
+        underline.style.background =
+          'rgba(128, 128, 128, 0.18)';
+
+        underline.style.boxShadow =
+          'inset 0 -2px 0 #ff4d67';
+      }
+    );
+
+    underline.addEventListener(
+      'mouseleave',
+      () => {
+        underline.style.background =
+          'transparent';
+
+        underline.style.boxShadow =
+          'inset 0 -2px 0 #ff4d67';
+      }
+    );
+
+    // ----------------------------------------------------------
+    // 클릭
+    // ----------------------------------------------------------
+
+    underline.addEventListener(
+      'mousedown',
+      event => {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    );
+
+    underline.addEventListener(
+      'click',
+      event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        activeDetectedExpression =
+          detectedText;
+
+        underline.classList.add(
+          'op-detected-expression-active'
+        );
+
+        if (currentAnalysis?.risky) {
+          showWarning(
+            input,
+            currentAnalysis
+          );
+        }
+      }
+    );
+
+    // ----------------------------------------------------------
+    // Overlay 삽입
+    // ----------------------------------------------------------
+
+    overlay.appendChild(
+      underline
+    );
+
+    parent.appendChild(
+      overlay
+    );
+
+    currentOverlay =
+      overlay;
+
+    // ----------------------------------------------------------
+    // 위치 동기화
+    // ----------------------------------------------------------
+
+    const sync = () => {
+      if (
+        !currentOverlay ||
+        currentOverlay !== overlay
+      ) {
+        return;
+      }
+
+      const rect =
+        input.getBoundingClientRect();
+
+      const pRect =
+        parent.getBoundingClientRect();
+
+      overlay.style.left =
+        `${rect.left - pRect.left}px`;
+
+      overlay.style.top =
+        `${rect.top - pRect.top}px`;
+
+      overlay.style.width =
+        `${rect.width}px`;
+
+      overlay.style.height =
+        `${rect.height}px`;
+
+      overlay.style.transform =
+        `translate(${-input.scrollLeft}px, ${-input.scrollTop}px)`;
+    };
+
+    input.addEventListener(
+      'scroll',
+      sync
+    );
+
+    window.addEventListener(
+      'resize',
+      sync
+    );
+
+    overlay._onepaceSync =
+      sync;
+
+    overlay._onepaceInput =
+      input;
+
+    return overlay;
+  }
+
+  // ============================================================
+  // Highlight 제거
+  // ============================================================
+
+  function removeHighlight() {
+    if (!currentOverlay) {
+      document
+        .querySelectorAll(
+          '[data-onepace-overlay="true"]'
+        )
+        .forEach(element => {
+          element.remove();
+        });
+
+      return;
+    }
+
+    const input =
+      currentOverlay._onepaceInput;
+
+    const sync =
+      currentOverlay._onepaceSync;
+
+    if (
+      input &&
+      sync
+    ) {
+      input.removeEventListener(
+        'scroll',
+        sync
+      );
+    }
+
+    window.removeEventListener(
+      'resize',
+      sync
+    );
+
+    currentOverlay.remove();
+
+    currentOverlay =
+      null;
+  }
+
+  // ============================================================
+  // Highlight 표시
+  // ============================================================
+
+  function showHighlight(
     input,
     analysis
   ) {
+    removeHighlight();
 
     if (
       !input ||
@@ -1219,27 +1410,263 @@
       return;
     }
 
+    const text =
+      getText(input);
+
+    if (!text) {
+      return;
+    }
+
+    const expression =
+      String(
+        analysis.detectedExpression ||
+        ''
+      ).trim();
+
+    // ----------------------------------------------------------
+    // detectedExpression이 실제 입력에 존재
+    // ----------------------------------------------------------
+
+    if (expression) {
+      const range =
+        findDetectedExpressionRange(
+          text,
+          expression
+        );
+
+      if (range) {
+        const actualExpression =
+          text.slice(
+            range.start,
+            range.end
+          );
+
+        currentDetectedExpression =
+          actualExpression;
+
+        activeDetectedExpression =
+          '';
+
+        createHighlightOverlay(
+          input,
+          range
+        );
+
+        console.log(
+          '[ONEPACE] detectedExpression 밑줄 표시:',
+          {
+            apiExpression:
+              expression,
+
+            actualExpression
+          }
+        );
+
+        return;
+      }
+    }
+
+    // ----------------------------------------------------------
+    // detectedExpression을 찾지 못한 경우
+    // 전체 텍스트에 밑줄
+    // ----------------------------------------------------------
+
+    const fullRange = {
+      start: 0,
+      end: text.length
+    };
+
+    currentDetectedExpression =
+      text;
+
+    activeDetectedExpression =
+      '';
+
+    createHighlightOverlay(
+      input,
+      fullRange
+    );
+  }
+
+  // ============================================================
+  // Warning 위치
+  // ============================================================
+
+  function positionWarning(
+    input,
+    wrapper
+  ) {
+    if (
+      !input ||
+      !wrapper
+    ) {
+      return;
+    }
+
+    const rect =
+      input.getBoundingClientRect();
+
+    const bubble =
+      wrapper.querySelector(
+        '.onepace-warning'
+      );
+
+    if (!bubble) return;
+
+    const bubbleRect =
+      bubble.getBoundingClientRect();
+
+    const bubbleWidth =
+      bubbleRect.width || 330;
+
+    const bubbleHeight =
+      bubbleRect.height || 220;
+
+    const gap = 10;
+
+    let left =
+      rect.left;
+
+    if (
+      activeDetectedExpression
+    ) {
+      try {
+        const text =
+          getText(input);
+
+        const range =
+          findDetectedExpressionRange(
+            text,
+            activeDetectedExpression
+          );
+
+        if (range) {
+          const style =
+            getComputedStyle(input);
+
+          const canvas =
+            document.createElement(
+              'canvas'
+            );
+
+          const context =
+            canvas.getContext('2d');
+
+          if (context) {
+            context.font =
+              style.font ||
+              `${style.fontSize} ${style.fontFamily}`;
+
+            const beforeText =
+              text.slice(
+                0,
+                range.start
+              );
+
+            const measured =
+              context.measureText(
+                beforeText
+              ).width;
+
+            left =
+              rect.left +
+              Math.min(
+                measured,
+                Math.max(
+                  0,
+                  rect.width -
+                  bubbleWidth
+                )
+              );
+          }
+        }
+      } catch {}
+    }
+
+    const maxLeft =
+      window.innerWidth -
+      bubbleWidth -
+      16;
+
+    left =
+      Math.min(
+        left,
+        maxLeft
+      );
+
+    left =
+      Math.max(
+        16,
+        left
+      );
+
+    let top =
+      rect.top -
+      bubbleHeight -
+      gap;
+
+    if (top < 16) {
+      top =
+        rect.bottom +
+        gap;
+    }
+
+    wrapper.style.position =
+      'fixed';
+
+    wrapper.style.left =
+      `${left}px`;
+
+    wrapper.style.top =
+      `${top}px`;
+
+    wrapper.style.right =
+      'auto';
+
+    wrapper.style.bottom =
+      'auto';
+
+    wrapper.style.width =
+      '330px';
+
+    wrapper.style.maxWidth =
+      'calc(100vw - 32px)';
+
+    wrapper.style.margin =
+      '0';
+
+    wrapper.style.transform =
+      'none';
+  }
+
+  // ============================================================
+  // Warning
+  // ============================================================
+
+  async function showWarning(
+    input,
+    analysis
+  ) {
+    if (
+      !input ||
+      !analysis?.risky
+    ) {
+      return;
+    }
 
     removeWarning();
-
 
     const loaded =
       await ensureTemplates();
 
-
-    if (!loaded) {
-      return;
-    }
-
+    if (!loaded) return;
 
     const template =
       document.getElementById(
         WARNING_TEMPLATE_ID
       );
 
-
     if (!template) {
-
       console.error(
         '[ONEPACE] warning template 없음'
       );
@@ -1247,35 +1674,24 @@
       return;
     }
 
-
     const wrapper =
       document.createElement('div');
 
-
     wrapper.id =
       WARNING_ID;
-
-
-    // ==========================================================
-    // 핵심
-    //
-    // wrapper 자체는 CSS에서 fixed 말풍선으로 처리
-    // template 내부 구조는 content-ui.html 그대로 사용
-    // ==========================================================
 
     wrapper.appendChild(
       template.content.cloneNode(true)
     );
 
+    const backdrop =
+      wrapper.querySelector(
+        '.onepace-warning-backdrop'
+      );
 
     const warning =
       wrapper.querySelector(
         '.onepace-warning'
-      );
-
-    const backdrop =
-      wrapper.querySelector(
-        '.onepace-warning-backdrop'
       );
 
     const country =
@@ -1308,231 +1724,294 @@
         '.onepace-use-suggestion'
       );
 
-
-    if (!warning) {
-
-      console.error(
-        '[ONEPACE] .onepace-warning 없음'
-      );
-
-      return;
-    }
-
-
-    // ==========================================================
-    // 데이터 삽입
-    // ==========================================================
+    // ----------------------------------------------------------
+    // 국가
+    // ----------------------------------------------------------
 
     if (country) {
-
       country.textContent =
         analysis.country?.nationality ||
         '';
-
     }
 
+    // ----------------------------------------------------------
+    // 이유
+    // ----------------------------------------------------------
 
     if (reason) {
-
       reason.textContent =
         analysis.nuanceExplanation ||
         analysis.realtimeDetection ||
-        '문화적 차이로 오해가 발생할 수 있는 표현이에요.';
-
+        '문화적 맥락에 따라 다르게 받아들여질 수 있어요.';
     }
 
+    // ----------------------------------------------------------
+    // 원문
+    // ----------------------------------------------------------
 
     if (original) {
-
       original.textContent =
+        activeDetectedExpression ||
+        currentDetectedExpression ||
+        analysis.detectedExpression ||
         getText(input).trim();
-
     }
 
+    // ----------------------------------------------------------
+    // 제안
+    // ----------------------------------------------------------
 
     if (suggestion) {
-
       suggestion.textContent =
         analysis.suggestedText ||
-        '더 자연스럽게 전달할 수 있는 표현을 확인해 주세요.';
-
+        '';
     }
 
-
-    // ==========================================================
-    // 그대로 전송
-    // ==========================================================
+    // ----------------------------------------------------------
+    // 그냥 보내기
+    // ----------------------------------------------------------
 
     if (sendAnyway) {
-
       sendAnyway.addEventListener(
         'click',
-        (event) => {
-
+        event => {
           event.preventDefault();
           event.stopPropagation();
 
           removeWarning();
-
-          try {
-            input.focus();
-          } catch {}
-
         }
       );
-
     }
 
-
-    // ==========================================================
-    // 수정해서 전송
-    // ==========================================================
+    // ----------------------------------------------------------
+    // 제안 사용
+    // ----------------------------------------------------------
 
     if (useSuggestion) {
-
       useSuggestion.addEventListener(
         'click',
-        (event) => {
-
+        event => {
           event.preventDefault();
           event.stopPropagation();
 
-
           const suggestedText =
-            analysis.suggestedText;
-
+            String(
+              analysis.suggestedText ||
+              ''
+            ).trim();
 
           if (!suggestedText) {
-
             removeWarning();
-
             return;
           }
 
+          suppressedText =
+            suggestedText;
+
+          lastAnalysisKey =
+            `${selectedCountry?.code || ''}:${suggestedText}`;
+
+          latestRequestKey =
+            lastAnalysisKey;
 
           setText(
             input,
             suggestedText
           );
 
+          currentAnalysis =
+            analysis;
+
+          currentDetectedExpression =
+            '';
+
+          activeDetectedExpression =
+            '';
+
+          removeHighlight();
+          removeWarning();
 
           activeComposer =
             input;
 
-
-          lastAnalysisKey =
-            `${selectedCountry?.code || ''}:${suggestedText.trim()}`;
-
-
-          removeWarning();
-
-
           try {
             input.focus();
-          } catch {}
 
+            if (
+              input.isContentEditable
+            ) {
+              const range =
+                document.createRange();
+
+              const selection =
+                window.getSelection();
+
+              range.selectNodeContents(
+                input
+              );
+
+              range.collapse(false);
+
+              selection.removeAllRanges();
+
+              selection.addRange(
+                range
+              );
+            } else {
+              input.setSelectionRange(
+                input.value.length,
+                input.value.length
+              );
+            }
+          } catch {}
         }
       );
-
     }
 
-
-    // ==========================================================
-    // 배경 클릭
-    // ==========================================================
+    // ----------------------------------------------------------
+    // Backdrop
+    // ----------------------------------------------------------
 
     if (backdrop) {
-
       backdrop.addEventListener(
         'click',
-        (event) => {
-
+        event => {
           if (
-            event.target === backdrop
+            event.target ===
+            backdrop
           ) {
-
             removeWarning();
-
           }
-
         }
       );
 
+      backdrop.style.position =
+        'static';
+
+      backdrop.style.inset =
+        'auto';
+
+      backdrop.style.width =
+        'auto';
+
+      backdrop.style.height =
+        'auto';
+
+      backdrop.style.background =
+        'transparent';
+
+      backdrop.style.display =
+        'block';
+
+      backdrop.style.pointerEvents =
+        'none';
     }
 
+    if (warning) {
+      warning.style.pointerEvents =
+        'auto';
+    }
 
     document.body.appendChild(
       wrapper
     );
 
-
-    console.log(
-      '[ONEPACE] 경고창 표시',
-      {
-        country:
-          analysis.country?.code,
-
-        original:
-          getText(input).trim(),
-
-        suggestion:
-          analysis.suggestedText
-      }
+    positionWarning(
+      input,
+      wrapper
     );
 
+    const reposition = () => {
+      if (
+        document.getElementById(
+          WARNING_ID
+        ) !== wrapper
+      ) {
+        return;
+      }
+
+      positionWarning(
+        input,
+        wrapper
+      );
+    };
+
+    wrapper._onepaceReposition =
+      reposition;
+
+    window.addEventListener(
+      'resize',
+      reposition
+    );
+
+    window.addEventListener(
+      'scroll',
+      reposition,
+      true
+    );
   }
 
-
   // ============================================================
-  // 경고창 제거
+  // Warning 제거
   // ============================================================
 
   function removeWarning() {
-
     const existing =
       document.getElementById(
         WARNING_ID
       );
 
+    if (!existing) return;
 
-    if (existing) {
-      existing.remove();
+    const reposition =
+      existing._onepaceReposition;
+
+    if (reposition) {
+      window.removeEventListener(
+        'resize',
+        reposition
+      );
+
+      window.removeEventListener(
+        'scroll',
+        reposition,
+        true
+      );
     }
 
+    existing.remove();
   }
-
 
   // ============================================================
   // 현재 입력 분석
   // ============================================================
 
   async function analyzeCurrentInput() {
-
     const input =
       activeComposer ||
       findComposer();
 
+    if (!input) return;
 
-    if (!input) {
+    activeComposer =
+      input;
 
-      console.log(
-        '[ONEPACE] 입력창을 찾을 수 없음'
-      );
-
-      return;
-    }
-
+    // ----------------------------------------------------------
+    // 비활성
+    // ----------------------------------------------------------
 
     if (!enabled) {
-
+      removeHighlight();
       removeWarning();
-
       return;
     }
 
+    // ----------------------------------------------------------
+    // 국가 미선택
+    // ----------------------------------------------------------
 
     if (!selectedCountry) {
-
+      removeHighlight();
       removeWarning();
 
       lastAnalysisKey = '';
@@ -1541,47 +2020,78 @@
       return;
     }
 
+    // ----------------------------------------------------------
+    // 메시지
+    // ----------------------------------------------------------
 
     const message =
       getText(input).trim();
 
-
     if (!message) {
-
+      removeHighlight();
       removeWarning();
 
       lastAnalysisKey = '';
       latestRequestKey = '';
 
+      suppressedText = '';
+
+      currentAnalysis = null;
+
+      currentDetectedExpression = '';
+      activeDetectedExpression = '';
+
       return;
     }
 
+    // ----------------------------------------------------------
+    // 제안문 적용 직후 재분석 방지
+    // ----------------------------------------------------------
+
+    if (
+      suppressedText &&
+      message === suppressedText
+    ) {
+      removeHighlight();
+      removeWarning();
+      return;
+    }
+
+    if (
+      suppressedText &&
+      message !== suppressedText
+    ) {
+      suppressedText = '';
+    }
+
+    // ----------------------------------------------------------
+    // 동일 요청 방지
+    // ----------------------------------------------------------
 
     const analysisKey =
       `${selectedCountry.code}:${message}`;
 
-
     if (
-      analysisKey === lastAnalysisKey
+      analysisKey ===
+      lastAnalysisKey
     ) {
-
       return;
     }
-
 
     lastAnalysisKey =
       analysisKey;
 
-
     latestRequestKey =
       analysisKey;
-
 
     console.log(
       '[ONEPACE] 현재 메시지 분석:',
       message
     );
 
+    // ----------------------------------------------------------
+    // API
+    // ----------------------------------------------------------
 
     const analysis =
       await analyzeMessage(
@@ -1589,236 +2099,318 @@
         selectedCountry
       );
 
-
-    // ==========================================================
-    // 오래된 응답 무시
-    // ==========================================================
+    // ----------------------------------------------------------
+    // 최신 요청인지 확인
+    // ----------------------------------------------------------
 
     if (
-      analysisKey !== latestRequestKey
+      analysisKey !==
+      latestRequestKey
     ) {
-
-      console.log(
-        '[ONEPACE] 오래된 API 응답 무시'
-      );
-
       return;
     }
 
-
-    // ==========================================================
-    // 실제 현재 입력과 다시 비교
-    //
-    // 사용자가 API 응답을 기다리는 사이
-    // 입력값을 바꿨다면 무조건 폐기
-    // ==========================================================
-
-    const currentInputText =
+    const latestInputText =
       getText(input).trim();
 
-
     if (
-      currentInputText !== message
+      latestInputText !==
+      message
     ) {
-
-      console.log(
-        '[ONEPACE] 입력값 변경으로 API 응답 폐기'
-      );
-
       return;
     }
 
+    // ----------------------------------------------------------
+    // 분석 결과 저장
+    // ----------------------------------------------------------
 
-    if (!analysis.risky) {
+    currentAnalysis =
+      analysis;
 
-      removeWarning();
-
-      return;
-    }
-
-
-    await showWarning(
-      input,
+    console.log(
+      '[ONEPACE] 분석 결과:',
       analysis
     );
 
+    // ----------------------------------------------------------
+    // 위험 없음
+    // ----------------------------------------------------------
+
+    if (!analysis.risky) {
+      removeHighlight();
+      removeWarning();
+
+      currentDetectedExpression =
+        '';
+
+      activeDetectedExpression =
+        '';
+
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // 위험 표현 표시
+    // ----------------------------------------------------------
+
+    showHighlight(
+      input,
+      analysis
+    );
   }
 
-
   // ============================================================
-  // Debounce
+  // 분석 예약
   // ============================================================
 
   function scheduleAnalysis() {
-
     clearTimeout(
       analysisTimer
     );
 
-
     analysisTimer =
       setTimeout(
         () => {
-
           analyzeCurrentInput();
-
         },
         350
       );
-
   }
 
-
   // ============================================================
-  // 입력 이벤트
+  // Input 이벤트
   // ============================================================
 
-  function bindInputMonitoring(input) {
+  function handleInputEvent(event) {
+    if (!enabled) return;
 
-    if (!input) {
-      return;
-    }
+    const target =
+      event.target;
 
+    if (!target) return;
 
-    activeComposer =
-      input;
+    const composer =
+      target.closest?.(
+        '#messageInput,' +
+        '#input,' +
+        '[data-onepace-composer],' +
+        '[data-qa="message_input"],' +
+        '[contenteditable="true"][role="textbox"],' +
+        'textarea'
+      );
 
+    if (!composer) return;
+
+    const actualComposer =
+      findComposer();
 
     if (
-      input.dataset.onepaceInputBound ===
-      'true'
+      actualComposer &&
+      actualComposer !== composer
     ) {
-
       return;
     }
 
+    activeComposer =
+      composer;
 
-    input.dataset.onepaceInputBound =
-      'true';
+    // 사용자가 다시 입력하면
+    // 기존 결과 제거
+    removeHighlight();
+    removeWarning();
 
-
-    input.addEventListener(
-      'input',
-      () => {
-
-        activeComposer =
-          input;
-
-
-        // 입력이 바뀌면 이전 결과를 즉시 무효화
-        latestRequestKey = '';
-
-
-        scheduleAnalysis();
-
-      },
-      false
-    );
-
-
-    input.addEventListener(
-      'focus',
-      () => {
-
-        activeComposer =
-          input;
-
-      },
-      false
-    );
-
+    // 새로운 입력 분석
+    scheduleAnalysis();
   }
 
+  // ============================================================
+  // Focus 이벤트
+  // ============================================================
+
+  function handleFocusEvent(event) {
+    if (!enabled) return;
+
+    const target =
+      event.target;
+
+    if (!target) return;
+
+    const composer =
+      target.closest?.(
+        '#messageInput,' +
+        '#input,' +
+        '[data-onepace-composer],' +
+        '[data-qa="message_input"],' +
+        '[contenteditable="true"][role="textbox"],' +
+        'textarea'
+      );
+
+    if (!composer) return;
+
+    activeComposer =
+      composer;
+
+    if (
+      !document.getElementById(
+        ROOT_ID
+      )
+    ) {
+      createComposerUI(
+        composer
+      );
+    }
+  }
 
   // ============================================================
-  // 전체 스캔
+  // 전송 감지
+  // ============================================================
+
+  document.addEventListener(
+    'click',
+    event => {
+      if (!enabled) return;
+
+      const target =
+        event.target;
+
+      if (!target) return;
+
+      const button =
+        target.closest?.('button');
+
+      if (!button) return;
+
+      const text =
+        (
+          button.innerText ||
+          button.textContent ||
+          ''
+        )
+          .trim()
+          .toLowerCase();
+
+      if (
+        text.includes('전송') ||
+        text.includes('send')
+      ) {
+        setTimeout(() => {
+          const input =
+            activeComposer ||
+            findComposer();
+
+          if (!input) return;
+
+          const currentText =
+            getText(input).trim();
+
+          if (!currentText) {
+            suppressedText = '';
+
+            lastAnalysisKey = '';
+            latestRequestKey = '';
+
+            currentAnalysis = null;
+
+            currentDetectedExpression =
+              '';
+
+            activeDetectedExpression =
+              '';
+
+            removeHighlight();
+            removeWarning();
+          }
+        }, 100);
+      }
+    },
+    true
+  );
+
+  // ============================================================
+  // Scan
   // ============================================================
 
   async function scan() {
-
-    if (!enabled) {
-      return;
-    }
-
+    if (!enabled) return;
 
     let input =
       activeComposer;
-
 
     if (
       !input ||
       !document.contains(input)
     ) {
-
       input =
         findComposer();
-
     }
 
-
-    if (!input) {
-      return;
-    }
-
+    if (!input) return;
 
     activeComposer =
       input;
 
-
     await createComposerUI(
       input
     );
-
-
-    bindInputMonitoring(
-      input
-    );
-
   }
 
-
   // ============================================================
-  // 전체 UI 제거
+  // 전체 제거
   // ============================================================
 
   function removeAll() {
-
     clearTimeout(
       analysisTimer
     );
 
-
-    analysisTimer =
-      null;
-
+    analysisTimer = null;
 
     lastAnalysisKey = '';
     latestRequestKey = '';
 
+    suppressedText = '';
 
+    currentAnalysis = null;
+
+    currentDetectedExpression =
+      '';
+
+    activeDetectedExpression =
+      '';
+
+    removeHighlight();
     removeWarning();
-
 
     document
       .querySelectorAll(
         `#${ROOT_ID}`
       )
-      .forEach(
-        (element) => {
-
-          element.remove();
-
-        }
-      );
-
+      .forEach(element => {
+        element.remove();
+      });
 
     composerRoot = null;
-
+    activeComposer = null;
   }
 
+  // ============================================================
+  // 이벤트 등록
+  // ============================================================
+
+  document.addEventListener(
+    'input',
+    handleInputEvent,
+    true
+  );
+
+  document.addEventListener(
+    'focusin',
+    handleFocusEvent,
+    true
+  );
 
   // ============================================================
-  // Extension message
+  // Chrome Runtime Message
   // ============================================================
 
   chrome.runtime.onMessage.addListener(
@@ -1827,12 +2419,10 @@
       sender,
       sendResponse
     ) => {
-
       if (
         message?.action ===
         'enable_onepace'
       ) {
-
         enabled = true;
 
         scan();
@@ -1844,12 +2434,10 @@
         return true;
       }
 
-
       if (
         message?.action ===
         'disable_onepace'
       ) {
-
         enabled = false;
 
         removeAll();
@@ -1860,145 +2448,148 @@
 
         return true;
       }
-
     }
   );
 
-
   // ============================================================
-  // 저장된 활성화 상태
+  // 초기 상태
   // ============================================================
 
   chrome.storage.local.get(
-    {
-      onepaceEnabled: true
-    },
-    (result) => {
+    'onepaceEnabled',
+    result => {
+      // 저장된 값이 없으면 최초 실행
+      if (
+        typeof result.onepaceEnabled !==
+        'boolean'
+      ) {
+        chrome.storage.local.set(
+          {
+            onepaceEnabled: true
+          },
+          () => {
+            enabled = true;
+
+            console.log(
+              '[ONEPACE] 최초 실행 → 활성화:',
+              enabled
+            );
+
+            scan();
+          }
+        );
+
+        return;
+      }
 
       enabled =
-        result.onepaceEnabled;
+        result.onepaceEnabled === true;
 
+      console.log(
+        '[ONEPACE] storage 값:',
+        result.onepaceEnabled
+      );
+
+      console.log(
+        '[ONEPACE] 초기 활성화 상태:',
+        enabled
+      );
 
       if (enabled) {
         scan();
+      } else {
+        removeAll();
       }
-
     }
   );
 
-
   // ============================================================
-  // 활성화 상태 변경
+  // Storage 변경
   // ============================================================
 
   chrome.storage.onChanged.addListener(
-    (changes) => {
-
+    (
+      changes,
+      areaName
+    ) => {
       if (
+        areaName !== 'local' ||
         !changes.onepaceEnabled
       ) {
         return;
       }
 
+      const newEnabled =
+        changes.onepaceEnabled.newValue ===
+        true;
 
       enabled =
-        changes.onepaceEnabled.newValue;
+        newEnabled;
 
-
-      if (enabled) {
-
-        scan();
-
-      } else {
-
+      if (!enabled) {
         removeAll();
-
-      }
-
-    }
-  );
-
-
-  // ============================================================
-  // 현지 시간 업데이트
-  // ============================================================
-
-  setInterval(
-    () => {
-
-      if (!selectedCountry) {
         return;
       }
 
-      updateCountryStatus();
-
-    },
-    30000
+      scan();
+    }
   );
 
+  // ============================================================
+  // 현지 시간 갱신
+  // ============================================================
+
+  setInterval(() => {
+    if (!selectedCountry) return;
+
+    updateCountryStatus();
+  }, 30000);
 
   // ============================================================
-  // DOM 변경 감지
+  // DOM Observer
   // ============================================================
 
   let observerTimer = null;
 
-
   const observer =
-    new MutationObserver(
-      () => {
+    new MutationObserver(() => {
+      if (!enabled) return;
 
-        if (!enabled) {
-          return;
-        }
+      if (observerTimer) return;
 
+      observerTimer =
+        setTimeout(() => {
+          observerTimer = null;
 
-        if (observerTimer) {
-          return;
-        }
+          const currentInput =
+            findComposer();
 
+          if (!currentInput) return;
 
-        observerTimer =
-          setTimeout(
-            () => {
+          if (
+            currentInput !==
+            activeComposer
+          ) {
+            activeComposer =
+              currentInput;
 
-              observerTimer = null;
+            removeHighlight();
+            removeWarning();
 
-
-              const currentInput =
-                findComposer();
-
-
-              if (
-                currentInput &&
-                currentInput !== activeComposer
-              ) {
-
-                activeComposer =
-                  currentInput;
-
-
-                scan();
-
-
-              } else if (
-                currentInput &&
-                !document.getElementById(
-                  ROOT_ID
-                )
-              ) {
-
-                scan();
-
-              }
-
-            },
-            500
-          );
-
-      }
-    );
-
+            createComposerUI(
+              currentInput
+            );
+          } else if (
+            !document.getElementById(
+              ROOT_ID
+            )
+          ) {
+            createComposerUI(
+              currentInput
+            );
+          }
+        }, 300);
+    });
 
   observer.observe(
     document.documentElement,
@@ -2008,17 +2599,13 @@
     }
   );
 
-
   // ============================================================
-  // 초기 실행
+  // 시작
   // ============================================================
 
   scan();
 
-
   console.log(
-    '[ONEPACE] Realtime AI analysis connected:',
-    ANALYZE_ENDPOINT
+    '[ONEPACE] Highlight-based AI analysis connected'
   );
-
 })();
