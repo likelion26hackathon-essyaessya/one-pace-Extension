@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" type="text/css" href="sidepanel.css">
+</head>
+<body>
+  <div class="panel-container">
+    <!-- 헤더 -->
+    <header class="header">
+      <div class="title-wrap">
+        <span class="logo-icon"></span>
+        <h1 class="title">ONE PACE Summary</h1>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn">⚙️</button>
+      </div>
+    </header>
+
+    <!-- 탭 상단 전환 버튼 -->
+    <div class="tab-menu">
+      <button class="tab-btn active" id="tabSummary">AI 회의록 요약</button>
+      <button class="tab-btn" id="tabDashboard">분석 리포트</button>
+    </div>
+
+    <!-- 1. AI 회의록 요약 영역 -->
+    <main class="content" id="summaryView">
+      <section class="alert-box">
+        <div class="alert-header">
+          <div class="alert-title-wrap">
+            <span class="bulb-icon">💡</span>
+            <span class="alert-title">AI 요약 생성 완료</span>
+          </div>
+          <span class="alert-date">8월 11일 11:00 회의 기준</span>
+        </div>
+        <a href="#" class="link-text">🔗 [원본 회의록 바로가기]</a>
+      </section>
+
+      <section class="card-section">
+        <div class="badge badge-purple">🎯 목표</div>
+        <ul class="info-list">
+          <li>글로벌 랜딩페이지 디자인 피드백 수렴 및 최종안 확정</li>
+        </ul>
+      </section>
+
+      <section class="card-section">
+        <div class="badge badge-purple">🔍 담당자 & 기한</div>
+        <ul class="info-list">
+          <li>담당자: 🇬🇧 Alex (런던 팀)</li>
+          <li>마감기한: 8월 15일 18:00 KST (10:00 BST / 시차 -8h)</li>
+        </ul>
+      </section>
+
+      <section class="card-section card-mint">
+        <div class="badge badge-mint-border">🏛️ 긴급도 & 상태</div>
+        <ul class="info-list">
+          <li>긴급도: 🟠 보통</li>
+          <li>승인 상태: 검토 중</li>
+          <li>피드백 상태: 반영 완료</li>
+        </ul>
+      </section>
+
+      <div class="action-buttons">
+        <button class="btn btn-primary">요약 텍스트 복사</button>
+        <button class="btn btn-primary">슬랙 채널에 공유</button>
+      </div>
+    </main>
+
+    <!-- 2. 전체 분석 리포트 영역 (기본 숨김) -->
+    <main class="content" id="dashboardView" style="display: none;">
+      <section class="alert-box">
+        <div class="alert-header">
+          <div class="alert-title-wrap">
+            <span class="bulb-icon">📊</span>
+            <span class="alert-title">전체 분석 리포트</span>
+          </div>
+        </div>
+        <p class="link-text">실시간 커뮤니케이션 리스크 및 지표 대시보드입니다.</p>
+      </section>
+
+      <section class="card-section">
+        <div class="badge badge-purple">📈 오해 탐지 현황</div>
+        <ul class="info-list">
+          <li>오늘 탐지된 오해 요소: 2건</li>
+          <li>커뮤니케이션 명확도 점수: 88점</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

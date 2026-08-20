@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko" style="width: 320px; min-width: 320px;">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" type="text/css" href="popup.css">
+</head>
+<body style="width: 320px; min-width: 320px; margin: 0; padding: 0;">
+  <div class="card">
+    <div class="card-header">
+      <div class="logo-title">
+        <span class="logo-icon"></span>
+        <span>ONE PACE</span>
+      </div>
+      <div class="header-icons">
+        <span>⚙️</span>
+        <span>✖</span>
+      </div>
+    </div>
+
+    <div class="card-body" id="cardBody">
+      <div class="status-badge">
+        <span class="dot"></span>
+        <span>분석 중...</span>
+      </div>
+      <p class="description">
+        AI가 실시간으로<br>오해를 탐지하고 있습니다.
+      </p>
+
+      <div class="btn-group">
+        <button class="btn" id="summaryBtn">AI 회의록 요약 열기</button>
+        <button class="btn" id="dashboardBtn">전체 분석 리포트 대시보드</button>
+      </div>
+    </div>
+
+    <div class="card-footer">
+      <span class="version">v1.0.0</span>
+      <div class="toggle-wrap">
+        <span id="toggleStatusText">ONE PACE 활성화됨</span>
+        <label class="switch">
+          <input type="checkbox" id="activeToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
