@@ -3,19 +3,13 @@
 
   // ============================================================
   // ONEPACE CONTENT SCRIPT
-  //
-  // 1. 상대 국가 선택
-  // 2. 입력창 원문 그대로 유지
-  // 3. 오해 표현 강조 없음
-  // 4. 입력창 위에 기존 말풍선 팝업 표시
-  // 5. 입력할 때만 분석
-  // 6. 입력값 자체는 절대 수정하지 않음
-  // 7. 불필요한 DOM 반복 작업 최소화
   // ============================================================
 
   if (window.top !== window.self) return;
 
-  if (document.documentElement.dataset.onepaceLoaded === 'true') {
+  if (
+    document.documentElement.dataset.onepaceLoaded === 'true'
+  ) {
     return;
   }
 
@@ -186,13 +180,10 @@
 
   let analysisTimer = null;
   let lastAnalysisKey = '';
-
-  // 응답이 늦게 와서 최신 상태를 덮어쓰는 것을 막기 위한
-  // "가장 최근에 보낸 요청" 키. 응답이 도착했을 때 이 값과
-  // 다르면(그 사이 사용자가 더 입력했으면) 그 응답은 버린다.
   let latestRequestKey = '';
 
   let observerTimer = null;
+  let repositionTimer = null;
 
 
   // ============================================================
@@ -203,7 +194,11 @@
     if (!element) return '';
 
     if (element.isContentEditable) {
-      return element.innerText || element.textContent || '';
+      return (
+        element.innerText ||
+        element.textContent ||
+        ''
+      );
     }
 
     return element.value || '';
@@ -233,39 +228,80 @@
 
 
   // ============================================================
-  // AI 분석 (api.onepace.site 실제 연동)
+  // AI 분석 API
   //
-  // 요청: POST { text, counterpartCountry(국가 코드) }
-  // 응답: { id, riskDetected, detectedExpression,
-  //         realtimeDetection, nuanceExplanation, suggestedText }
+  // POST
+  // {
+  //   text: "...",
+  //   counterpartCountry: "US"
+  // }
+  //
+  // RESPONSE
+  // {
+  //   id: 0,
+  //   riskDetected: true,
+  //   detectedExpression: "...",
+  //   realtimeDetection: "...",
+  //   nuanceExplanation: "...",
+  //   suggestedText: "..."
+  // }
   // ============================================================
 
   async function analyzeMessage(message, country) {
 
+    console.log('[ONEPACE] API 요청 시작');
+    console.log('[ONEPACE] text:', message);
+    console.log('[ONEPACE] country:', country);
+
     if (!message || !country) {
+
+      console.log(
+        '[ONEPACE] message 또는 country 없음'
+      );
+
       return {
-        risky: false
+        risky: false,
+        country
       };
     }
 
     try {
 
-      const response = await fetch(ANALYZE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          text: message,
-          counterpartCountry: country.code
-        })
-      });
+      console.log(
+        '[ONEPACE] API 호출:',
+        ANALYZE_ENDPOINT
+      );
+
+      const response = await fetch(
+        ANALYZE_ENDPOINT,
+        {
+          method: 'POST',
+
+          headers: {
+            'Content-Type': 'application/json'
+          },
+
+          body: JSON.stringify({
+            text: message,
+            counterpartCountry: country.code
+          })
+        }
+      );
+
+      console.log(
+        '[ONEPACE] API status:',
+        response.status
+      );
 
       if (!response.ok) {
 
+        const errorText =
+          await response.text().catch(() => '');
+
         console.warn(
           '[ONEPACE] 분석 API 응답 오류:',
-          response.status
+          response.status,
+          errorText
         );
 
         return {
@@ -274,15 +310,40 @@
         };
       }
 
-      const data = await response.json();
+      const data =
+        await response.json();
+
+      console.log(
+        '[ONEPACE] API response:',
+        data
+      );
+
+
+      // ----------------------------------------------------------
+      // 위험 없음
+      // ----------------------------------------------------------
 
       if (!data.riskDetected) {
+
+        console.log(
+          '[ONEPACE] 오해 가능성 없음'
+        );
 
         return {
           risky: false,
           country
         };
       }
+
+
+      // ----------------------------------------------------------
+      // 위험 있음
+      // ----------------------------------------------------------
+
+      console.log(
+        '[ONEPACE] 오해 가능성 감지:',
+        data.detectedExpression
+      );
 
       return {
         risky: true,
@@ -370,17 +431,21 @@
     if (!input) return null;
 
     return (
-      input.closest('[data-onepace-composer-container]') ||
+      input.closest(
+        '[data-onepace-composer-container]'
+      ) ||
       input.closest('.composer') ||
       input.closest('.composer-wrap') ||
-      input.closest('[data-qa="message_input_container"]') ||
+      input.closest(
+        '[data-qa="message_input_container"]'
+      ) ||
       input.parentElement
     );
   }
 
 
   // ============================================================
-  // ONEPACE 국가 UI
+  // ONEPACE 국가 UI 생성
   // ============================================================
 
   function findOrCreateRoot(input) {
@@ -402,7 +467,9 @@
     }
 
     let root =
-      container.querySelector(`#${ROOT_ID}`);
+      container.querySelector(
+        `#${ROOT_ID}`
+      );
 
     if (root) {
       return root;
@@ -466,7 +533,10 @@
       </div>
     `;
 
-    container.insertBefore(root, input);
+    container.insertBefore(
+      root,
+      input
+    );
 
     bindCountryUI(root);
 
@@ -480,36 +550,58 @@
 
   function bindCountryUI(root) {
 
-    if (root.dataset.bound === 'true') {
+    if (
+      root.dataset.bound === 'true'
+    ) {
       return;
     }
 
     root.dataset.bound = 'true';
 
     const button =
-      root.querySelector('.onepace-globe-button');
+      root.querySelector(
+        '.onepace-globe-button'
+      );
 
     const picker =
-      root.querySelector('.op-picker');
+      root.querySelector(
+        '.op-picker'
+      );
 
     const search =
-      root.querySelector('.op-search');
+      root.querySelector(
+        '.op-search'
+      );
 
     const list =
-      root.querySelector('.op-list');
+      root.querySelector(
+        '.op-list'
+      );
 
     const close =
-      root.querySelector('.op-close');
+      root.querySelector(
+        '.op-close'
+      );
 
     const status =
-      root.querySelector('.op-status');
+      root.querySelector(
+        '.op-status'
+      );
 
     const statusName =
-      root.querySelector('.op-status-name');
+      root.querySelector(
+        '.op-status-name'
+      );
 
     const statusTime =
-      root.querySelector('.op-status-time');
+      root.querySelector(
+        '.op-status-time'
+      );
 
+
+    // ----------------------------------------------------------
+    // 국가 목록 렌더링
+    // ----------------------------------------------------------
 
     function render(query = '') {
 
@@ -517,14 +609,20 @@
         query.trim().toLowerCase();
 
       const filtered =
-        COUNTRIES.filter((country) => {
+        COUNTRIES.filter(
+          (country) => {
 
-          return (
-            country.name.toLowerCase().includes(q) ||
-            country.nationality.toLowerCase().includes(q)
-          );
+            return (
+              country.name
+                .toLowerCase()
+                .includes(q) ||
 
-        });
+              country.nationality
+                .toLowerCase()
+                .includes(q)
+            );
+          }
+        );
 
 
       if (!filtered.length) {
@@ -540,56 +638,70 @@
 
 
       list.innerHTML =
-        filtered.map((country) => {
+        filtered
+          .map(
+            (country) => {
 
-          const selected =
-            selectedCountry?.code === country.code
-              ? 'selected'
-              : '';
+              const selected =
+                selectedCountry?.code ===
+                country.code
+                  ? 'selected'
+                  : '';
 
-          return `
-            <button
-              type="button"
-              class="op-item ${selected}"
-              data-country="${country.code}"
-            >
-              <span class="op-flag">
-                ${country.flag}
-              </span>
+              return `
+                <button
+                  type="button"
+                  class="op-item ${selected}"
+                  data-country="${country.code}"
+                >
 
-              <span>
-                ${escapeHtml(country.nationality)}
-              </span>
-            </button>
-          `;
+                  <span class="op-flag">
+                    ${country.flag}
+                  </span>
 
-        }).join('');
+                  <span>
+                    ${escapeHtml(
+                      country.nationality
+                    )}
+                  </span>
+
+                </button>
+              `;
+            }
+          )
+          .join('');
 
 
       list
         .querySelectorAll('.op-item')
-        .forEach((item) => {
+        .forEach(
+          (item) => {
 
-          item.addEventListener(
-            'click',
-            (event) => {
+            item.addEventListener(
+              'click',
+              (event) => {
 
-              event.preventDefault();
-              event.stopPropagation();
+                event.preventDefault();
+                event.stopPropagation();
 
-              selectedCountry =
-                COUNTRIES.find(
-                  (country) =>
-                    country.code === item.dataset.country
-                ) || null;
+                selectedCountry =
+                  COUNTRIES.find(
+                    (country) =>
+                      country.code ===
+                      item.dataset.country
+                  ) || null;
 
-              render(search.value);
-            }
-          );
-
-        });
+                render(search.value);
+              }
+            );
+          }
+        );
     }
 
+
+    // ----------------------------------------------------------
+    // 지구본 버튼
+    // ----------------------------------------------------------
 
     button.addEventListener(
       'click',
@@ -599,12 +711,19 @@
         event.stopPropagation();
 
         const isOpen =
-          picker.classList.contains('open');
+          picker.classList.contains(
+            'open'
+          );
 
         if (isOpen) {
 
-          picker.classList.remove('open');
-          button.classList.remove('open');
+          picker.classList.remove(
+            'open'
+          );
+
+          button.classList.remove(
+            'open'
+          );
 
           return;
         }
@@ -613,15 +732,27 @@
 
         search.value = '';
 
-        picker.classList.add('open');
-        button.classList.add('open');
+        picker.classList.add(
+          'open'
+        );
 
-        setTimeout(() => {
-          search.focus();
-        }, 0);
+        button.classList.add(
+          'open'
+        );
+
+        setTimeout(
+          () => {
+            search.focus();
+          },
+          0
+        );
       }
     );
 
+
+    // ----------------------------------------------------------
+    // 국가 검색
+    // ----------------------------------------------------------
 
     search.addEventListener(
       'input',
@@ -631,6 +762,10 @@
     );
 
 
+    // ----------------------------------------------------------
+    // 닫기
+    // ----------------------------------------------------------
+
     close.addEventListener(
       'click',
       (event) => {
@@ -638,13 +773,24 @@
         event.preventDefault();
         event.stopPropagation();
 
-        picker.classList.remove('open');
-        button.classList.remove('open');
+        picker.classList.remove(
+          'open'
+        );
+
+        button.classList.remove(
+          'open'
+        );
+
 
         if (!selectedCountry) {
-          status.classList.remove('show');
+
+          status.classList.remove(
+            'show'
+          );
+
           return;
         }
+
 
         statusName.textContent =
           selectedCountry.nationality;
@@ -654,7 +800,10 @@
             selectedCountry.timezone
           )})`;
 
-        status.classList.add('show');
+        status.classList.add(
+          'show'
+        );
+
 
         lastAnalysisKey = '';
 
@@ -663,17 +812,29 @@
     );
 
 
+    // ----------------------------------------------------------
+    // 외부 클릭
+    // ----------------------------------------------------------
+
     document.addEventListener(
       'click',
       (event) => {
 
-        if (root.contains(event.target)) {
+        if (
+          root.contains(
+            event.target
+          )
+        ) {
           return;
         }
 
-        picker.classList.remove('open');
-        button.classList.remove('open');
+        picker.classList.remove(
+          'open'
+        );
 
+        button.classList.remove(
+          'open'
+        );
       },
       true
     );
@@ -699,43 +860,36 @@
           minute: '2-digit',
           hour12: false
         }
-      ).format(new Date());
+      ).format(
+        new Date()
+      );
 
     } catch {
 
       return '--:--';
-
     }
   }
 
 
   // ============================================================
-  // 실시간 말풍선
-  //
-  // 중요:
-  // CSS에 이미 존재하는
-  //
-  // #onepace-realtime-warning
-  // .op-realtime-content
-  // .op-realtime-title
-  // .op-realtime-icon
-  // .op-realtime-message
-  // .op-realtime-suggestion
-  // .op-suggest-label
-  // .op-suggest-text
-  // .op-realtime-arrow
-  //
-  // 구조를 그대로 사용한다.
+  // 실시간 말풍선 표시
   // ============================================================
 
-  function showLiveWarning(input, analysis) {
+  function showLiveWarning(
+    input,
+    analysis
+  ) {
 
     let popup =
-      document.getElementById(WARNING_ID);
+      document.getElementById(
+        WARNING_ID
+      );
 
 
-    // 위험 표현이 없으면 팝업 제거
-    if (!analysis?.risky) {
+    // 위험 없음
+    if (
+      !analysis?.risky
+    ) {
 
       if (popup) {
         popup.remove();
@@ -745,22 +899,22 @@
     }
 
 
-    // 팝업이 없을 때만 생성
+    // 팝업 최초 생성
     if (!popup) {
 
       popup =
-        document.createElement('div');
+        document.createElement(
+          'div'
+        );
 
       popup.id =
         WARNING_ID;
 
-      document.body.appendChild(popup);
+      document.body.appendChild(
+        popup
+      );
     }
 
-
-    // ==========================================================
-    // 기존 UXUI 말풍선 구조
-    // ==========================================================
 
     popup.innerHTML = `
 
@@ -819,7 +973,6 @@
     `;
 
 
-    // 팝업 위치 계산
     positionWarning(
       input,
       popup
@@ -829,159 +982,153 @@
 
   // ============================================================
   // 팝업 위치
-  //
-  // 입력창 바로 위.
-  //
-  // 입력창을 가리지 않도록
-  // bottom 기준으로 입력창 top에 붙인다.
-  //
-  // 팝업 자체는 fixed이므로
-  // 입력창 위치가 바뀌지 않는다.
   // ============================================================
 
-function positionWarning(input, popup) {
+  function positionWarning(
+    input,
+    popup
+  ) {
 
-  if (!input || !popup) {
-    return;
+    if (
+      !input ||
+      !popup
+    ) {
+      return;
+    }
+
+    const rect =
+      input.getBoundingClientRect();
+
+
+    popup.style.position =
+      'fixed';
+
+    popup.style.zIndex =
+      '2147483647';
+
+    popup.style.pointerEvents =
+      'auto';
+
+    popup.style.boxSizing =
+      'border-box';
+
+    popup.style.visibility =
+      'visible';
+
+
+    // ----------------------------------------------------------
+    // 입력창 가운데
+    // ----------------------------------------------------------
+
+    const popupWidth =
+      Math.min(
+        Math.max(
+          rect.width,
+          330
+        ),
+        460
+      );
+
+    const centerX =
+      rect.left +
+      (
+        rect.width / 2
+      );
+
+    let left =
+      centerX -
+      (
+        popupWidth / 2
+      );
+
+
+    const viewportPadding =
+      16;
+
+
+    left =
+      Math.max(
+        viewportPadding,
+        Math.min(
+          left,
+          window.innerWidth -
+          popupWidth -
+          viewportPadding
+        )
+      );
+
+
+    popup.style.left =
+      `${Math.round(left)}px`;
+
+    popup.style.width =
+      `${popupWidth}px`;
+
+
+    // ----------------------------------------------------------
+    // 높이 측정
+    // ----------------------------------------------------------
+
+    popup.style.top =
+      'auto';
+
+    popup.style.bottom =
+      'auto';
+
+    const popupHeight =
+      popup.offsetHeight;
+
+
+    // ----------------------------------------------------------
+    // 입력창 위에 배치
+    // ----------------------------------------------------------
+
+    let top =
+      rect.top -
+      popupHeight -
+      8;
+
+
+    // 화면 위쪽을 넘어가면
+    // 입력창 내부로 들어가지 않도록
+    // 최소한 화면 상단에 고정
+    if (top < 8) {
+
+      top = 8;
+    }
+
+
+    popup.style.top =
+      `${Math.round(top)}px`;
+
+    popup.style.bottom =
+      'auto';
+
+
+    const content =
+      popup.querySelector(
+        '.op-realtime-content'
+      );
+
+    if (content) {
+
+      content.style.display =
+        'block';
+
+      content.style.visibility =
+        'visible';
+
+      content.style.opacity =
+        '1';
+
+      content.style.boxSizing =
+        'border-box';
+    }
   }
 
-  const rect = input.getBoundingClientRect();
-
-  // ------------------------------------------------------------
-  // 기존 말풍선 디자인 유지
-  // ------------------------------------------------------------
-
-  popup.style.position = 'fixed';
-
-  popup.style.zIndex = '2147483647';
-
-  popup.style.pointerEvents = 'auto';
-
-  popup.style.boxSizing = 'border-box';
-
-  // ------------------------------------------------------------
-  // 입력창 가운데 정렬
-  // ------------------------------------------------------------
-
-  const popupWidth = Math.min(
-    Math.max(rect.width, 330),
-    460
-  );
-
-  const centerX =
-    rect.left + (rect.width / 2);
-
-  let left =
-    centerX - (popupWidth / 2);
-
-  // 화면 밖으로 나가지 않도록 보정
-  const viewportPadding = 16;
-
-  left = Math.max(
-    viewportPadding,
-    Math.min(
-      left,
-      window.innerWidth - popupWidth - viewportPadding
-    )
-  );
-
-  popup.style.left =
-    `${Math.round(left)}px`;
-
-  popup.style.width =
-    `${popupWidth}px`;
-
-  // ------------------------------------------------------------
-  // 팝업을 먼저 정상 렌더링시킨 후 실제 높이 측정
-  // ------------------------------------------------------------
-
-  popup.style.top = 'auto';
-
-  popup.style.bottom = 'auto';
-
-  // display:none 등의 CSS가 있다면 정상적으로 측정될 수 있도록
-  // visibility만 유지
-  popup.style.visibility = 'visible';
-
-  const popupHeight =
-    popup.offsetHeight;
-
-  // ------------------------------------------------------------
-  // 입력창 위쪽에 겹쳐 배치
-  //
-  // 입력창의 top보다 팝업 bottom이 8px 위에 오도록 함.
-  //
-  // 즉:
-  //
-  //      ┌───────────────────────┐
-  //      │   ONEPACE 말풍선      │
-  //      │   오해 가능성이...    │
-  //      │   추천 표현 ...       │
-  //      └─────────▼─────────────┘
-  //                8px
-  //      ┌───────────────────────┐
-  //      │ 입력창 텍스트          │
-  //      │                       │
-  //      └───────────────────────┘
-  //
-  // ------------------------------------------------------------
-
-  let top =
-    rect.top - popupHeight - 8;
-
-  // ------------------------------------------------------------
-  // 화면 위쪽을 넘어가면 입력창 내부 상단에 살짝 겹침
-  // 하지만 텍스트 영역은 피함.
-  // ------------------------------------------------------------
-
-  if (top < 8) {
-
-    /*
-     * 팝업을 입력창 위쪽에 최대한 유지.
-     *
-     * 입력창 자체와 겹쳐야 하는 경우에는
-     * textarea의 첫 줄 영역을 가리지 않도록
-     * 입력창 상단에서 최소한의 공간만 사용한다.
-     */
-
-    top = Math.max(
-      8,
-      rect.top
-    );
-  }
-
-  popup.style.top =
-    `${Math.round(top)}px`;
-
-  popup.style.bottom =
-    'auto';
-
-  // ------------------------------------------------------------
-  // 중요:
-  // 기존 CSS의 말풍선 구조를 그대로 살림
-  // ------------------------------------------------------------
-
-  const content =
-    popup.querySelector('.op-realtime-content');
-
-  if (content) {
-
-    content.style.display = 'block';
-
-    content.style.visibility = 'visible';
-
-    content.style.opacity = '1';
-
-    content.style.boxSizing = 'border-box';
-  }
-}
 
   // ============================================================
-  // 실시간 분석
-  //
-  // API 호출은 비동기이므로, 응답을 받았을 때
-  // "그 사이 사용자가 더 입력해서 이미 최신이 아닌 응답"인지
-  // latestRequestKey로 확인한 뒤에만 화면에 반영한다.
+  // 현재 입력값 분석
   // ============================================================
 
   async function analyzeCurrentInput() {
@@ -990,9 +1137,17 @@ function positionWarning(input, popup) {
       activeComposer ||
       findComposer();
 
-    if (!input) return;
+    if (!input) {
+
+      console.warn(
+        '[ONEPACE] 입력창을 찾지 못했습니다.'
+      );
+
+      return;
+    }
 
 
+    // 국가 선택 안 됨
     if (!selectedCountry) {
 
       removeWarning();
@@ -1005,6 +1160,7 @@ function positionWarning(input, popup) {
       getText(input).trim();
 
 
+    // 입력값 없음
     if (!message) {
 
       removeWarning();
@@ -1020,8 +1176,10 @@ function positionWarning(input, popup) {
       `${selectedCountry.code}:${message}`;
 
 
+    // 같은 요청 방지
     if (
-      analysisKey === lastAnalysisKey
+      analysisKey ===
+      lastAnalysisKey
     ) {
       return;
     }
@@ -1034,6 +1192,12 @@ function positionWarning(input, popup) {
       analysisKey;
 
 
+    console.log(
+      '[ONEPACE] 현재 메시지 분석:',
+      message
+    );
+
+
     const analysis =
       await analyzeMessage(
         message,
@@ -1041,16 +1205,24 @@ function positionWarning(input, popup) {
       );
 
 
-    // 응답이 도착했을 때, 그 사이 사용자가 더 입력해서
-    // 이미 이 요청이 최신이 아니게 되었다면 결과를 버린다.
+    // 최신 요청이 아니면 버림
     if (
-      analysisKey !== latestRequestKey
+      analysisKey !==
+      latestRequestKey
     ) {
+
+      console.log(
+        '[ONEPACE] 이전 API 응답 무시'
+      );
+
       return;
     }
 
 
-    if (!analysis.risky) {
+    // 위험 없음
+    if (
+      !analysis.risky
+    ) {
 
       removeWarning();
 
@@ -1058,6 +1230,7 @@ function positionWarning(input, popup) {
     }
 
 
+    // 위험 있음
     showLiveWarning(
       input,
       analysis
@@ -1089,7 +1262,7 @@ function positionWarning(input, popup) {
 
 
   // ============================================================
-  // 팝업 제거
+  // 말풍선 제거
   // ============================================================
 
   function removeWarning() {
@@ -1106,7 +1279,7 @@ function positionWarning(input, popup) {
 
 
   // ============================================================
-  // 전체 ONEPACE UI 제거
+  // ONEPACE UI 전체 제거
   // ============================================================
 
   function removeAll() {
@@ -1122,41 +1295,55 @@ function positionWarning(input, popup) {
 
     removeWarning();
 
+
     document
       .querySelectorAll(
         `#${ROOT_ID}`
       )
-      .forEach((element) => {
-        element.remove();
-      });
+      .forEach(
+        (element) => {
+          element.remove();
+        }
+      );
   }
 
 
   // ============================================================
-  // 입력 이벤트
+  // 입력 이벤트 감시
   // ============================================================
 
-  function bindInputMonitoring(input) {
+  function bindInputMonitoring(
+    input
+  ) {
 
     if (!input) return;
 
 
     if (
-      input.dataset.onepaceInputBound ===
+      input.dataset
+        .onepaceInputBound ===
       'true'
     ) {
-      activeComposer = input;
+
+      activeComposer =
+        input;
+
       return;
     }
 
 
-    input.dataset.onepaceInputBound =
+    input.dataset
+      .onepaceInputBound =
       'true';
 
 
     activeComposer =
       input;
 
+
+    // ----------------------------------------------------------
+    // 입력
+    // ----------------------------------------------------------
 
     input.addEventListener(
       'input',
@@ -1171,6 +1358,10 @@ function positionWarning(input, popup) {
       false
     );
 
+
+    // ----------------------------------------------------------
+    // 포커스
+    // ----------------------------------------------------------
 
     input.addEventListener(
       'focus',
@@ -1187,20 +1378,20 @@ function positionWarning(input, popup) {
 
   // ============================================================
   // 전송 버튼
-  //
-  // 아무것도 가로채지 않는다.
   // ============================================================
 
-  function bindSendButton(input) {
+  function bindSendButton(
+    input
+  ) {
 
     if (!input) return;
 
-    // 기존 전송 동작 그대로 유지.
+    // 기존 전송 동작 그대로 유지
   }
 
 
   // ============================================================
-  // 전체 scan
+  // 전체 스캔
   // ============================================================
 
   function scan() {
@@ -1225,6 +1416,7 @@ function positionWarning(input, popup) {
 
 
     if (!input) {
+
       return;
     }
 
@@ -1250,11 +1442,15 @@ function positionWarning(input, popup) {
 
 
   // ============================================================
-  // 활성화 / 비활성화
+  // 활성화 / 비활성화 메시지
   // ============================================================
 
   chrome.runtime.onMessage.addListener(
-    (message, sender, sendResponse) => {
+    (
+      message,
+      sender,
+      sendResponse
+    ) => {
 
       if (
         message?.action ===
@@ -1289,12 +1485,13 @@ function positionWarning(input, popup) {
         return true;
       }
 
+      return false;
     }
   );
 
 
   // ============================================================
-  // 저장 상태
+  // 저장된 활성화 상태
   // ============================================================
 
   chrome.storage.local.get(
@@ -1309,15 +1506,20 @@ function positionWarning(input, popup) {
       if (enabled) {
         scan();
       }
-
     }
   );
 
 
+  // ============================================================
+  // 활성화 상태 변경
+  // ============================================================
+
   chrome.storage.onChanged.addListener(
     (changes) => {
 
-      if (!changes.onepaceEnabled) {
+      if (
+        !changes.onepaceEnabled
+      ) {
         return;
       }
 
@@ -1327,11 +1529,13 @@ function positionWarning(input, popup) {
 
 
       if (enabled) {
+
         scan();
+
       } else {
+
         removeAll();
       }
-
     }
   );
 
@@ -1352,21 +1556,23 @@ function positionWarning(input, popup) {
         .querySelectorAll(
           `#${ROOT_ID}`
         )
-        .forEach((root) => {
+        .forEach(
+          (root) => {
 
-          const time =
-            root.querySelector(
-              '.op-status-time'
-            );
+            const time =
+              root.querySelector(
+                '.op-status-time'
+              );
 
-          if (!time) return;
+            if (!time) return;
 
-          time.textContent =
-            `(현지 시각 ${getLocalTime(
-              selectedCountry.timezone
-            )})`;
 
-        });
+            time.textContent =
+              `(현지 시각 ${getLocalTime(
+                selectedCountry.timezone
+              )})`;
+          }
+        );
 
     },
     30000
@@ -1375,34 +1581,36 @@ function positionWarning(input, popup) {
 
   // ============================================================
   // DOM 변경 감지
-  //
-  // 500ms debounce
   // ============================================================
 
   const observer =
-    new MutationObserver(() => {
+    new MutationObserver(
+      () => {
 
-      if (!enabled) {
-        return;
+        if (!enabled) {
+          return;
+        }
+
+
+        if (observerTimer) {
+          return;
+        }
+
+
+        observerTimer =
+          setTimeout(
+            () => {
+
+              observerTimer =
+                null;
+
+              scan();
+
+            },
+            500
+          );
       }
-
-
-      if (observerTimer) {
-        return;
-      }
-
-
-      observerTimer =
-        setTimeout(() => {
-
-          observerTimer =
-            null;
-
-          scan();
-
-        }, 500);
-
-    });
+    );
 
 
   observer.observe(
@@ -1415,13 +1623,8 @@ function positionWarning(input, popup) {
 
 
   // ============================================================
-  // 스크롤 / 리사이즈 시
-  //
-  // 팝업 위치만 다시 계산.
-  // 입력 이벤트 때마다 위치 계산하지 않음.
+  // 팝업 위치 재계산
   // ============================================================
-
-  let repositionTimer = null;
 
   function schedulePopupPosition() {
 
@@ -1429,29 +1632,39 @@ function positionWarning(input, popup) {
       return;
     }
 
+
     repositionTimer =
-      requestAnimationFrame(() => {
+      requestAnimationFrame(
+        () => {
 
-        repositionTimer = null;
+          repositionTimer =
+            null;
 
-        const popup =
-          document.getElementById(
-            WARNING_ID
+
+          const popup =
+            document.getElementById(
+              WARNING_ID
+            );
+
+          if (!popup) {
+            return;
+          }
+
+
+          const input =
+            activeComposer;
+
+          if (!input) {
+            return;
+          }
+
+
+          positionWarning(
+            input,
+            popup
           );
-
-        if (!popup) return;
-
-        const input =
-          activeComposer;
-
-        if (!input) return;
-
-        positionWarning(
-          input,
-          popup
-        );
-
-      });
+        }
+      );
   }
 
 
@@ -1482,7 +1695,7 @@ function positionWarning(input, popup) {
 
 
   console.log(
-    '[ONEPACE] Realtime AI analysis (api.onepace.site) connected'
+    '[ONEPACE] Realtime AI analysis content script loaded'
   );
 
 })();
