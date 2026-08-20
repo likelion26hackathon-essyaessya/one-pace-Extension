@@ -184,3 +184,174 @@ body {
   background-color: #00c49f;
   color: #ffffff;
 }
+
+/* ============================================================
+   MEETING FILE UPLOAD
+   ============================================================ */
+
+.meeting-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.meeting-upload-button {
+  width: 100%;
+  min-height: 44px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 14px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  background: #ffffff;
+  color: #333333;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.meeting-upload-button:hover {
+  border-color: #14b8a6;
+  background: #f0fdfa;
+}
+
+.meeting-upload-plus {
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+  color: #14b8a6;
+}
+
+
+/* ============================================================
+   SELECTED FILE
+   ============================================================ */
+
+.meeting-file-info {
+  width: 100%;
+  min-height: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 10px;
+
+  border-radius: 8px;
+
+  background: #f0fdfa;
+  color: #0f766e;
+
+  font-size: 12px;
+}
+
+.meeting-file-remove {
+  border: none;
+  background: transparent;
+
+  color: #9ca3af;
+
+  font-size: 18px;
+  line-height: 1;
+
+  cursor: pointer;
+}
+
+.meeting-file-remove:hover {
+  color: #ef4444;
+}
+
+
+/* ============================================================
+   AI SUMMARY BUTTON
+   ============================================================ */
+
+.meeting-summary-button {
+  width: 100%;
+  min-height: 40px;
+
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #14b8a6;
+  color: #ffffff;
+
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.meeting-summary-button:hover {
+  background: #0d9488;
+}
+
+.meeting-summary-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+
+/* ============================================================
+   LOADING
+   ============================================================ */
+
+.meeting-loading {
+  width: 100%;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  margin-bottom: 14px;
+  padding: 12px;
+
+  border-radius: 8px;
+
+  background: #f0fdfa;
+  color: #0f766e;
+
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.meeting-loading-icon {
+  font-size: 15px;
+}
+
+/* ============================================================
+   MEETING SUMMARY TEXT
+   ============================================================ */
+
+.meeting-summary-text {
+  margin: 0;
+
+  color: #374151;
+
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+.card-section {
+  margin-bottom: 20px;
+}
+
+.alert-box {
+  margin-bottom: 20px;
+}

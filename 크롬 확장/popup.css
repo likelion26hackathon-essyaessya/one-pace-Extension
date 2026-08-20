@@ -34,11 +34,12 @@ body {
 }
 
 .logo-icon {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  display: block;
-  flex-shrink: 0;
+  width: 24px !important;
+  height: 24px !important;
+  display: block !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  flex: 0 0 24px !important;
 }
 
 .logo-title {

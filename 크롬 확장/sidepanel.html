@@ -4,90 +4,327 @@
   <meta charset="UTF-8">
   <link rel="stylesheet" type="text/css" href="sidepanel.css">
 </head>
+
 <body>
   <div class="panel-container">
+
     <!-- 헤더 -->
     <header class="header">
       <div class="title-wrap">
         <span class="logo-icon"></span>
         <h1 class="title">ONE PACE Summary</h1>
       </div>
+
       <div class="header-actions">
         <button class="icon-btn">⚙️</button>
       </div>
     </header>
 
-    <!-- 탭 상단 전환 버튼 -->
+
+    <!-- 탭 -->
     <div class="tab-menu">
-      <button class="tab-btn active" id="tabSummary">AI 회의록 요약</button>
-      <button class="tab-btn" id="tabDashboard">분석 리포트</button>
+      <button class="tab-btn active" id="tabSummary">
+        AI 회의록 요약
+      </button>
+
+      <button class="tab-btn" id="tabDashboard">
+        분석 리포트
+      </button>
     </div>
 
-    <!-- 1. AI 회의록 요약 영역 -->
+
+    <!-- ========================================================
+         1. AI 회의록 요약
+         ======================================================== -->
+
     <main class="content" id="summaryView">
-      <section class="alert-box">
-        <div class="alert-header">
-          <div class="alert-title-wrap">
-            <span class="bulb-icon">💡</span>
-            <span class="alert-title">AI 요약 생성 완료</span>
-          </div>
-          <span class="alert-date">8월 11일 11:00 회의 기준</span>
+
+
+      <!-- 회의록 추가 -->
+      <section class="meeting-upload-section">
+
+        <input
+          type="file"
+          id="meetingFileInput"
+          accept=".txt,.json,.md,.docx"
+          hidden
+        >
+
+        <button
+          type="button"
+          class="meeting-upload-button"
+          id="meetingUploadButton"
+        >
+          <span>회의록 추가</span>
+          <span class="meeting-upload-plus">+</span>
+        </button>
+
+        <div
+          class="meeting-file-info"
+          id="meetingFileInfo"
+          style="display: none;"
+        >
+          <span id="meetingFileName"></span>
+
+          <button
+            type="button"
+            id="meetingFileRemove"
+            class="meeting-file-remove"
+          >
+            ×
+          </button>
         </div>
-        <a href="#" class="link-text">🔗 [원본 회의록 바로가기]</a>
+
+        <button
+          type="button"
+          id="meetingSummaryButton"
+          class="meeting-summary-button"
+          style="display: none;"
+        >
+          AI로 회의록 요약하기
+        </button>
+
       </section>
 
-      <section class="card-section">
-        <div class="badge badge-purple">🎯 목표</div>
-        <ul class="info-list">
-          <li>글로벌 랜딩페이지 디자인 피드백 수렴 및 최종안 확정</li>
-        </ul>
+
+      <!-- AI 상태 -->
+      <section
+        class="meeting-loading"
+        id="meetingLoading"
+        style="display: none;"
+      >
+        <span class="meeting-loading-icon">✦</span>
+        <span>AI가 회의 내용을 분석하고 있습니다...</span>
       </section>
 
-      <section class="card-section">
-        <div class="badge badge-purple">🔍 담당자 & 기한</div>
-        <ul class="info-list">
-          <li>담당자: 🇬🇧 Alex (런던 팀)</li>
-          <li>마감기한: 8월 15일 18:00 KST (10:00 BST / 시차 -8h)</li>
-        </ul>
-      </section>
 
-      <section class="card-section card-mint">
-        <div class="badge badge-mint-border">🏛️ 긴급도 & 상태</div>
-        <ul class="info-list">
-          <li>긴급도: 🟠 보통</li>
-          <li>승인 상태: 검토 중</li>
-          <li>피드백 상태: 반영 완료</li>
-        </ul>
-      </section>
+      <!-- ======================================================
+           AI 결과
+           ====================================================== -->
 
-      <div class="action-buttons">
-        <button class="btn btn-primary">요약 텍스트 복사</button>
-        <button class="btn btn-primary">슬랙 채널에 공유</button>
+      <div id="meetingSummaryResult">
+
+
+        <!-- 상단 상태 -->
+        <section class="alert-box">
+
+          <div class="alert-header">
+
+            <div class="alert-title-wrap">
+              <span class="bulb-icon">💡</span>
+
+              <span
+                class="alert-title"
+                id="summaryTitle"
+              >
+                AI 요약 생성 완료
+              </span>
+            </div>
+
+            <span
+              class="alert-date"
+              id="summaryDate"
+            >
+              -
+            </span>
+
+          </div>
+
+          <a
+            href="#"
+            class="link-text"
+            id="originalMeetingLink"
+          >
+            🔗 [원본 회의록 바로가기]
+          </a>
+
+        </section>
+
+
+        <!-- 목표 -->
+        <section class="card-section">
+
+          <div class="badge badge-purple">
+            🎯 목표
+          </div>
+
+          <ul class="info-list">
+            <li id="meetingGoal">
+              글로벌 랜딩페이지 디자인 피드백 수렴 및 최종안 확정
+            </li>
+          </ul>
+
+        </section>
+
+
+        <!-- 담당자 & 기한 -->
+        <section class="card-section">
+
+          <div class="badge badge-purple">
+            🔍 담당자 & 기한
+          </div>
+
+          <ul
+            class="info-list"
+            id="meetingActionInfo"
+          >
+            <li>
+              담당자: 🇬🇧 Alex (런던 팀)
+            </li>
+
+            <li>
+              마감기한: 8월 15일 18:00 KST
+            </li>
+          </ul>
+
+        </section>
+
+
+        <!-- 긴급도 & 상태 -->
+        <section class="card-section card-mint">
+
+          <div class="badge badge-mint-border">
+            🏛️ 긴급도 & 상태
+          </div>
+
+          <ul
+            class="info-list"
+            id="meetingStatusInfo"
+          >
+            <li>
+              긴급도: 🟠 보통
+            </li>
+
+            <li>
+              승인 상태: 검토 중
+            </li>
+
+            <li>
+              피드백 상태: 반영 완료
+            </li>
+          </ul>
+
+        </section>
+
+
+        <!-- 회의 요약 -->
+        <section class="card-section">
+
+          <div class="badge badge-purple">
+            📝 회의 요약
+          </div>
+
+          <p
+            class="meeting-summary-text"
+            id="meetingSummaryText"
+          >
+            논의된 내용을 바탕으로 다음 일정과 담당자가 정리되었습니다.
+          </p>
+
+        </section>
+
+
+        <!-- 결정사항 -->
+        <section
+          class="card-section"
+          id="decisionsSection"
+        >
+
+          <div class="badge badge-purple">
+            ✅ 결정사항
+          </div>
+
+          <ul
+            class="info-list"
+            id="meetingDecisions"
+          >
+            <li>결정된 사항이 없습니다.</li>
+          </ul>
+
+        </section>
+
+
+        <!-- 버튼 -->
+        <div class="action-buttons">
+
+          <button
+            class="btn btn-primary"
+            id="copySummaryButton"
+          >
+            요약 텍스트 복사
+          </button>
+
+          <button
+            class="btn btn-primary"
+            id="shareSummaryButton"
+          >
+            슬랙 채널에 공유
+          </button>
+
+        </div>
+
       </div>
+
     </main>
 
-    <!-- 2. 전체 분석 리포트 영역 (기본 숨김) -->
-    <main class="content" id="dashboardView" style="display: none;">
+
+    <!-- ========================================================
+         2. 전체 분석 리포트
+         ======================================================== -->
+
+    <main
+      class="content"
+      id="dashboardView"
+      style="display: none;"
+    >
+
       <section class="alert-box">
+
         <div class="alert-header">
+
           <div class="alert-title-wrap">
             <span class="bulb-icon">📊</span>
-            <span class="alert-title">전체 분석 리포트</span>
+
+            <span class="alert-title">
+              전체 분석 리포트
+            </span>
           </div>
+
         </div>
-        <p class="link-text">실시간 커뮤니케이션 리스크 및 지표 대시보드입니다.</p>
+
+        <p class="link-text">
+          실시간 커뮤니케이션 리스크 및 지표 대시보드입니다.
+        </p>
+
       </section>
+
 
       <section class="card-section">
-        <div class="badge badge-purple">📈 오해 탐지 현황</div>
+
+        <div class="badge badge-purple">
+          📈 오해 탐지 현황
+        </div>
+
         <ul class="info-list">
-          <li>오늘 탐지된 오해 요소: 2건</li>
-          <li>커뮤니케이션 명확도 점수: 88점</li>
+
+          <li>
+            오늘 탐지된 오해 요소: 2건
+          </li>
+
+          <li>
+            커뮤니케이션 명확도 점수: 88점
+          </li>
+
         </ul>
+
       </section>
+
     </main>
+
   </div>
 
+
   <script src="sidepanel.js"></script>
+
 </body>
 </html>

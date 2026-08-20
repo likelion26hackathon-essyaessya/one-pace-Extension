@@ -1,4 +1,5 @@
 (() => {
+
   'use strict';
 
   // ============================================================
@@ -23,6 +24,8 @@
   const WARNING_ID = 'onepace-realtime-warning';
   const COMPOSER_TEMPLATE_ID = 'onepace-composer-template';
   const WARNING_TEMPLATE_ID = 'onepace-warning-template';
+  const TOAST_TEMPLATE_ID = 'onepace-toast-template';
+
   const UI_FILE = 'content-ui.html';
 
   const ANALYZE_ENDPOINT =
@@ -183,21 +186,23 @@
   let selectedCountry = null;
   let activeComposer = null;
   let composerRoot = null;
-
   let analysisTimer = null;
   let latestRequestKey = '';
   let lastAnalysisKey = '';
-
   let templateLoaded = false;
   let templateLoadingPromise = null;
-
   let suppressedText = '';
   let currentAnalysis = null;
-
   let currentOverlay = null;
-
   let currentDetectedExpression = '';
   let activeDetectedExpression = '';
+
+  // Accept highlight
+  let acceptedHighlight = null;
+
+  // Accept Toast
+  let currentToast = null;
+  let toastTimer = null;
 
   // ============================================================
   // 유틸
@@ -295,6 +300,547 @@
   }
 
   // ============================================================
+  // Accept 후 민트색 박스 제거
+  // ============================================================
+
+  function removeAcceptedHighlight() {
+    if (!acceptedHighlight) return;
+
+    if (acceptedHighlight._sync) {
+      window.removeEventListener(
+        'resize',
+        acceptedHighlight._sync
+      );
+
+      window.removeEventListener(
+        'scroll',
+        acceptedHighlight._sync,
+        true
+      );
+    }
+
+    if (acceptedHighlight._restore) {
+      acceptedHighlight._restore();
+    }
+
+    acceptedHighlight.remove();
+    acceptedHighlight = null;
+  }
+
+  // ============================================================
+  // Accept 후 민트색 박스
+  // ============================================================
+
+  function showAcceptedHighlight(input, text) {
+    if (!input || !text) return;
+
+    removeAcceptedHighlight();
+
+    const inputRect =
+      input.getBoundingClientRect();
+
+    const style =
+      getComputedStyle(input);
+
+    // ----------------------------------------------------------
+    // Contenteditable
+    // ----------------------------------------------------------
+
+    if (input.isContentEditable) {
+      const selection =
+        window.getSelection();
+
+      const range =
+        document.createRange();
+
+      range.selectNodeContents(input);
+
+      const rects =
+        Array.from(
+          range.getClientRects()
+        );
+
+      if (!rects.length) {
+        return;
+      }
+
+      const rect =
+        rects[0];
+
+      const highlight =
+        document.createElement('div');
+
+      highlight.className =
+        'onepace-accepted-highlight';
+
+      highlight.style.position =
+        'fixed';
+
+      highlight.style.left =
+        `${rect.left}px`;
+
+      highlight.style.top =
+        `${rect.top}px`;
+
+      highlight.style.width =
+        `${rect.width}px`;
+
+      highlight.style.height =
+        `${rect.height}px`;
+
+      highlight.style.background =
+        'rgba(126, 240, 190, 0.48)';
+
+      highlight.style.borderRadius =
+        '4px';
+
+      highlight.style.pointerEvents =
+        'none';
+
+      highlight.style.zIndex =
+        '999998';
+
+      highlight.style.opacity =
+        '1';
+
+      highlight.style.transition =
+        'opacity 1.35s ease-out';
+
+      highlight.style.mixBlendMode =
+        'multiply';
+
+      document.body.appendChild(
+        highlight
+      );
+
+      acceptedHighlight =
+        highlight;
+
+      const sync = () => {
+        if (
+          !acceptedHighlight ||
+          acceptedHighlight !== highlight
+        ) {
+          return;
+        }
+
+        const newRects =
+          Array.from(
+            range.getClientRects()
+          );
+
+        if (!newRects.length) {
+          return;
+        }
+
+        const newRect =
+          newRects[0];
+
+        highlight.style.left =
+          `${newRect.left}px`;
+
+        highlight.style.top =
+          `${newRect.top}px`;
+
+        highlight.style.width =
+          `${newRect.width}px`;
+
+        highlight.style.height =
+          `${newRect.height}px`;
+      };
+
+      acceptedHighlight._sync =
+        sync;
+
+      window.addEventListener(
+        'resize',
+        sync
+      );
+
+      window.addEventListener(
+        'scroll',
+        sync,
+        true
+      );
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          highlight.style.opacity =
+            '0';
+        });
+      });
+
+      setTimeout(() => {
+        if (
+          acceptedHighlight ===
+          highlight
+        ) {
+          removeAcceptedHighlight();
+        }
+      }, 1450);
+
+      try {
+        selection.removeAllRanges();
+      } catch {}
+
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // Textarea / input
+    // ----------------------------------------------------------
+
+    const parent =
+      input.offsetParent ||
+      input.parentElement ||
+      document.body;
+
+    const parentRect =
+      parent.getBoundingClientRect();
+
+    const canvas =
+      document.createElement('canvas');
+
+    const context =
+      canvas.getContext('2d');
+
+    if (!context) return;
+
+    context.font =
+      style.font ||
+      `${style.fontSize} ${style.fontFamily}`;
+
+    const paddingLeft =
+      parseFloat(
+        style.paddingLeft
+      ) || 0;
+
+    const paddingTop =
+      parseFloat(
+        style.paddingTop
+      ) || 0;
+
+    const lineHeight =
+      parseFloat(
+        style.lineHeight
+      ) ||
+      parseFloat(
+        style.fontSize
+      ) * 1.4;
+
+    const textWidth =
+      context.measureText(
+        text
+      ).width;
+
+    const availableWidth =
+      Math.max(
+        0,
+        input.clientWidth -
+        paddingLeft -
+        (
+          parseFloat(
+            style.paddingRight
+          ) || 0
+        )
+      );
+
+    const actualWidth =
+      Math.min(
+        textWidth,
+        availableWidth
+      );
+
+    const highlight =
+      document.createElement('div');
+
+    highlight.className =
+      'onepace-accepted-highlight';
+
+    highlight.style.position =
+      'absolute';
+
+    highlight.style.left =
+      `${inputRect.left -
+        parentRect.left +
+        paddingLeft}px`;
+
+    highlight.style.top =
+      `${inputRect.top -
+        parentRect.top +
+        paddingTop}px`;
+
+    highlight.style.width =
+      `${actualWidth}px`;
+
+    highlight.style.height =
+      `${lineHeight}px`;
+
+    highlight.style.background =
+      'rgba(126, 240, 190, 0.48)';
+
+    highlight.style.borderRadius =
+      '4px';
+
+    highlight.style.pointerEvents =
+      'none';
+
+    highlight.style.zIndex =
+      '0';
+
+    highlight.style.opacity =
+      '1';
+
+    highlight.style.transition =
+      'opacity 1.35s ease-out';
+
+    const originalPosition =
+      input.style.position;
+
+    const originalZIndex =
+      input.style.zIndex;
+
+    const originalBackground =
+      input.style.background;
+
+    if (
+      getComputedStyle(input).position ===
+      'static'
+    ) {
+      input.style.position =
+        'relative';
+    }
+
+    input.style.zIndex =
+      '1';
+
+    if (
+      style.backgroundColor !==
+      'transparent'
+    ) {
+      input.style.backgroundColor =
+        'transparent';
+    }
+
+    parent.appendChild(
+      highlight
+    );
+
+    acceptedHighlight =
+      highlight;
+
+    const sync = () => {
+      if (
+        !acceptedHighlight ||
+        acceptedHighlight !== highlight
+      ) {
+        return;
+      }
+
+      const rect =
+        input.getBoundingClientRect();
+
+      const pRect =
+        parent.getBoundingClientRect();
+
+      highlight.style.left =
+        `${rect.left -
+          pRect.left +
+          paddingLeft}px`;
+
+      highlight.style.top =
+        `${rect.top -
+          pRect.top +
+          paddingTop}px`;
+    };
+
+    acceptedHighlight._sync =
+      sync;
+
+    acceptedHighlight._restore =
+      () => {
+        input.style.position =
+          originalPosition;
+
+        input.style.zIndex =
+          originalZIndex;
+
+        input.style.background =
+          originalBackground;
+      };
+
+    window.addEventListener(
+      'resize',
+      sync
+    );
+
+    window.addEventListener(
+      'scroll',
+      sync,
+      true
+    );
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        highlight.style.opacity =
+          '0';
+      });
+    });
+
+    setTimeout(() => {
+      if (
+        acceptedHighlight ===
+        highlight
+      ) {
+        if (
+          acceptedHighlight._restore
+        ) {
+          acceptedHighlight._restore();
+        }
+
+        removeAcceptedHighlight();
+      }
+    }, 1450);
+  }
+
+  // ============================================================
+  // Accept Toast
+  // ============================================================
+
+  async function showAcceptToast(suggestedText) {
+    const loaded =
+      await ensureTemplates();
+
+    if (!loaded) {
+      return;
+    }
+
+    const template =
+      document.getElementById(
+        TOAST_TEMPLATE_ID
+      );
+
+    if (!template) {
+      console.error(
+        '[ONEPACE] toast template 없음'
+      );
+      return;
+    }
+
+    // 기존 Toast 제거
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+
+    if (currentToast) {
+      currentToast.remove();
+      currentToast = null;
+    }
+
+    const toast =
+      document.createElement('div');
+
+    toast.className =
+      'onepace-toast-root';
+
+    toast.appendChild(
+      template.content.cloneNode(true)
+    );
+
+    const toastSuggestion =
+      toast.querySelector(
+        '.onepace-toast-suggestion-text'
+      );
+
+    const undoButton =
+      toast.querySelector(
+        '.onepace-toast-undo'
+      );
+
+    if (toastSuggestion) {
+      toastSuggestion.textContent =
+        String(
+          suggestedText ?? ''
+        ).trim();
+    }
+
+    // 화면 하단 고정
+    toast.style.position =
+      'fixed';
+
+    toast.style.left =
+      '50%';
+
+    toast.style.bottom =
+      '32px';
+
+    toast.style.transform =
+      'translateX(-50%)';
+
+    toast.style.zIndex =
+      '2147483647';
+
+    toast.style.pointerEvents =
+      'auto';
+
+    // 실행 취소
+    // 현재는 기존 기능을 변경하지 않고
+    // Toast만 닫음
+    if (undoButton) {
+      undoButton.addEventListener(
+        'click',
+        event => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (toastTimer) {
+            clearTimeout(toastTimer);
+            toastTimer = null;
+          }
+
+          toast.remove();
+
+          if (
+            currentToast === toast
+          ) {
+            currentToast = null;
+          }
+        }
+      );
+    }
+
+    document.body.appendChild(
+      toast
+    );
+
+    currentToast =
+      toast;
+
+    // CSS에 .show 애니메이션이 있을 경우 적용
+    requestAnimationFrame(() => {
+      toast.classList.add('show');
+    });
+
+    // 3초 후 자동 제거
+    toastTimer =
+      setTimeout(() => {
+        toast.classList.remove(
+          'show'
+        );
+
+        setTimeout(() => {
+          if (
+            currentToast === toast
+          ) {
+            toast.remove();
+            currentToast = null;
+          }
+        }, 250);
+      }, 3000);
+  }
+
+  // ============================================================
   // Composer 탐색
   // ============================================================
 
@@ -312,7 +858,9 @@
 
     for (const selector of selectors) {
       const elements =
-        document.querySelectorAll(selector);
+        document.querySelectorAll(
+          selector
+        );
 
       for (const element of elements) {
         const rect =
@@ -362,6 +910,9 @@
       ) &&
       document.getElementById(
         WARNING_TEMPLATE_ID
+      ) &&
+      document.getElementById(
+        TOAST_TEMPLATE_ID
       )
     );
   }
@@ -378,59 +929,71 @@
       return templateLoadingPromise;
     }
 
-    templateLoadingPromise = (async () => {
-      try {
-        const resourceUrl =
-          chrome.runtime.getURL(UI_FILE);
-
-        const response =
-          await fetch(resourceUrl);
-
-        if (!response.ok) {
-          throw new Error(
-            `UI template HTTP ${response.status}`
-          );
-        }
-
-        const html =
-          await response.text();
-
-        const wrapper =
-          document.createElement('div');
-
-        wrapper.innerHTML = html;
-
-        wrapper
-          .querySelectorAll('template')
-          .forEach(template => {
-            document.body.appendChild(
-              template.cloneNode(true)
+    templateLoadingPromise =
+      (async () => {
+        try {
+          const resourceUrl =
+            chrome.runtime.getURL(
+              UI_FILE
             );
-          });
 
-        if (!templatesExist()) {
-          throw new Error(
-            'ONEPACE template을 찾을 수 없습니다.'
+          const response =
+            await fetch(
+              resourceUrl
+            );
+
+          if (!response.ok) {
+            throw new Error(
+              `UI template HTTP ${response.status}`
+            );
+          }
+
+          const html =
+            await response.text();
+
+          const wrapper =
+            document.createElement(
+              'div'
+            );
+
+          wrapper.innerHTML =
+            html;
+
+          wrapper
+            .querySelectorAll(
+              'template'
+            )
+            .forEach(template => {
+              document.body.appendChild(
+                template.cloneNode(true)
+              );
+            });
+
+          if (!templatesExist()) {
+            throw new Error(
+              'ONEPACE template을 찾을 수 없습니다.'
+            );
+          }
+
+          templateLoaded = true;
+
+          return true;
+
+        } catch (error) {
+          console.error(
+            '[ONEPACE] UI template 로드 실패:',
+            error
           );
+
+          return false;
         }
-
-        templateLoaded = true;
-
-        return true;
-      } catch (error) {
-        console.error(
-          '[ONEPACE] UI template 로드 실패:',
-          error
-        );
-
-        return false;
-      }
-    })();
+      })();
 
     try {
       return await templateLoadingPromise;
     } finally {
-      templateLoadingPromise = null;
+      templateLoadingPromise =
+        null;
     }
   }
 
@@ -442,7 +1005,9 @@
     if (!input) return null;
 
     const container =
-      findComposerContainer(input);
+      findComposerContainer(
+        input
+      );
 
     if (!container) return null;
 
@@ -452,7 +1017,9 @@
       );
 
     if (existing) {
-      composerRoot = existing;
+      composerRoot =
+        existing;
+
       return existing;
     }
 
@@ -469,23 +1036,38 @@
     if (!template) return null;
 
     const root =
-      document.createElement('div');
+      document.createElement(
+        'div'
+      );
 
-    root.id = ROOT_ID;
+    root.id =
+      ROOT_ID;
 
     root.appendChild(
-      template.content.cloneNode(true)
+      template.content.cloneNode(
+        true
+      )
     );
 
     const computed =
-      getComputedStyle(container);
+      getComputedStyle(
+        container
+      );
 
-    if (computed.position === 'static') {
-      container.style.position = 'relative';
+    if (
+      computed.position ===
+      'static'
+    ) {
+      container.style.position =
+        'relative';
     }
 
-    if (computed.overflow === 'hidden') {
-      container.style.overflow = 'visible';
+    if (
+      computed.overflow ===
+      'hidden'
+    ) {
+      container.style.overflow =
+        'visible';
     }
 
     container.insertBefore(
@@ -493,9 +1075,11 @@
       input
     );
 
-    composerRoot = root;
+    composerRoot =
+      root;
 
     bindCountryUI(root);
+
     updateCountryStatus();
 
     return root;
@@ -509,12 +1093,14 @@
     if (!root) return;
 
     if (
-      root.dataset.onepaceBound === 'true'
+      root.dataset.onepaceBound ===
+      'true'
     ) {
       return;
     }
 
-    root.dataset.onepaceBound = 'true';
+    root.dataset.onepaceBound =
+      'true';
 
     const button =
       root.querySelector(
@@ -573,20 +1159,27 @@
       return;
     }
 
-    function renderCountryList(query = '') {
+    function renderCountryList(
+      query = ''
+    ) {
       const normalizedQuery =
         String(query)
           .trim()
           .toLowerCase();
 
       const filtered =
-        COUNTRIES.filter(country =>
-          country.name
-            .toLowerCase()
-            .includes(normalizedQuery) ||
-          country.nationality
-            .toLowerCase()
-            .includes(normalizedQuery)
+        COUNTRIES.filter(
+          country =>
+            country.name
+              .toLowerCase()
+              .includes(
+                normalizedQuery
+              ) ||
+            country.nationality
+              .toLowerCase()
+              .includes(
+                normalizedQuery
+              )
         );
 
       if (!filtered.length) {
@@ -610,7 +1203,9 @@
               <button
                 type="button"
                 class="onepace-country-item ${
-                  selected ? 'selected' : ''
+                  selected
+                    ? 'selected'
+                    : ''
                 }"
                 data-country-code="${escapeHtml(
                   country.code
@@ -647,7 +1242,8 @@
               selectedCountry =
                 COUNTRIES.find(
                   country =>
-                    country.code === code
+                    country.code ===
+                    code
                 ) || null;
 
               renderCountryList(
@@ -656,21 +1252,38 @@
 
               updateCountryStatus();
 
-              search.value = '';
+              search.value =
+                '';
 
-              popup.classList.remove('open');
-              button.classList.remove('open');
+              popup.classList.remove(
+                'open'
+              );
 
-              lastAnalysisKey = '';
-              latestRequestKey = '';
-              suppressedText = '';
+              button.classList.remove(
+                'open'
+              );
 
-              currentAnalysis = null;
-              currentDetectedExpression = '';
-              activeDetectedExpression = '';
+              lastAnalysisKey =
+                '';
+
+              latestRequestKey =
+                '';
+
+              suppressedText =
+                '';
+
+              currentAnalysis =
+                null;
+
+              currentDetectedExpression =
+                '';
+
+              activeDetectedExpression =
+                '';
 
               removeWarning();
               removeHighlight();
+              removeAcceptedHighlight();
 
               analyzeCurrentInput();
             }
@@ -685,20 +1298,34 @@
         event.stopPropagation();
 
         const isOpen =
-          popup.classList.contains('open');
+          popup.classList.contains(
+            'open'
+          );
 
         if (isOpen) {
-          popup.classList.remove('open');
-          button.classList.remove('open');
+          popup.classList.remove(
+            'open'
+          );
+
+          button.classList.remove(
+            'open'
+          );
+
           return;
         }
 
         renderCountryList();
 
-        search.value = '';
+        search.value =
+          '';
 
-        popup.classList.add('open');
-        button.classList.add('open');
+        popup.classList.add(
+          'open'
+        );
+
+        button.classList.add(
+          'open'
+        );
 
         setTimeout(() => {
           search.focus();
@@ -721,26 +1348,44 @@
         event.preventDefault();
         event.stopPropagation();
 
-        popup.classList.remove('open');
-        button.classList.remove('open');
+        popup.classList.remove(
+          'open'
+        );
+
+        button.classList.remove(
+          'open'
+        );
       }
     );
 
     document.addEventListener(
       'click',
       event => {
-        if (root.contains(event.target)) {
+        if (
+          root.contains(
+            event.target
+          )
+        ) {
           return;
         }
 
-        popup.classList.remove('open');
-        button.classList.remove('open');
+        popup.classList.remove(
+          'open'
+        );
+
+        button.classList.remove(
+          'open'
+        );
       },
       true
     );
 
     renderCountryList();
   }
+
+  // ============================================================
+  // 국가 상태
+  // ============================================================
 
   function updateCountryStatus() {
     if (!composerRoot) return;
@@ -769,9 +1414,16 @@
     }
 
     if (!selectedCountry) {
-      status.classList.remove('show');
-      statusCountry.textContent = '';
-      statusTime.textContent = '';
+      status.classList.remove(
+        'show'
+      );
+
+      statusCountry.textContent =
+        '';
+
+      statusTime.textContent =
+        '';
+
       return;
     }
 
@@ -783,7 +1435,9 @@
         selectedCountry.timezone
       )})`;
 
-    status.classList.add('show');
+    status.classList.add(
+      'show'
+    );
   }
 
   // ============================================================
@@ -854,19 +1508,24 @@
         country,
 
         detectedExpression:
-          data?.detectedExpression || '',
+          data?.detectedExpression ||
+          '',
 
         realtimeDetection:
-          data?.realtimeDetection || '',
+          data?.realtimeDetection ||
+          '',
 
         nuanceExplanation:
-          data?.nuanceExplanation || '',
+          data?.nuanceExplanation ||
+          '',
 
         suggestedText:
-          data?.suggestedText || '',
+          data?.suggestedText ||
+          '',
 
         raw: data
       };
+
     } catch (error) {
       console.error(
         '[ONEPACE] API 호출 실패:',
@@ -889,18 +1548,24 @@
     const original =
       String(text ?? '');
 
-    let normalized = '';
-    const positionMap = [];
+    let normalized =
+      '';
+
+    const positionMap =
+      [];
 
     for (
       let i = 0;
       i < original.length;
       i++
     ) {
-      const char = original[i];
+      const char =
+        original[i];
 
       if (
-        /[\p{L}\p{N}]/u.test(char)
+        /[\p{L}\p{N}]/u.test(
+          char
+        )
       ) {
         normalized +=
           char.toLowerCase();
@@ -931,13 +1596,12 @@
         detectedExpression ?? ''
       ).trim();
 
-    if (!original || !target) {
+    if (
+      !original ||
+      !target
+    ) {
       return null;
     }
-
-    // ----------------------------------------------------------
-    // 1. 완전 일치
-    // ----------------------------------------------------------
 
     const exactIndex =
       original
@@ -946,7 +1610,9 @@
           target.toLowerCase()
         );
 
-    if (exactIndex !== -1) {
+    if (
+      exactIndex !== -1
+    ) {
       return {
         start: exactIndex,
         end:
@@ -955,15 +1621,15 @@
       };
     }
 
-    // ----------------------------------------------------------
-    // 2. 정규화 비교
-    // ----------------------------------------------------------
-
     const textData =
-      normalizeForMatch(original);
+      normalizeForMatch(
+        original
+      );
 
     const targetData =
-      normalizeForMatch(target);
+      normalizeForMatch(
+        target
+      );
 
     const normalizedText =
       textData.normalized;
@@ -983,7 +1649,9 @@
         normalizedTarget
       );
 
-    if (normalizedIndex === -1) {
+    if (
+      normalizedIndex === -1
+    ) {
       return null;
     }
 
@@ -1007,7 +1675,8 @@
 
     if (
       start === undefined ||
-      lastCharacterIndex === undefined
+      lastCharacterIndex ===
+        undefined
     ) {
       return null;
     }
@@ -1015,7 +1684,8 @@
     return {
       start,
       end:
-        lastCharacterIndex + 1
+        lastCharacterIndex +
+        1
     };
   }
 
@@ -1029,7 +1699,10 @@
   ) {
     removeHighlight();
 
-    if (!input || !range) {
+    if (
+      !input ||
+      !range
+    ) {
       return null;
     }
 
@@ -1041,7 +1714,9 @@
     }
 
     const overlay =
-      document.createElement('div');
+      document.createElement(
+        'div'
+      );
 
     overlay.className =
       'onepace-input-overlay';
@@ -1063,18 +1738,16 @@
     const style =
       getComputedStyle(input);
 
-    // ----------------------------------------------------------
-    // Overlay
-    // ----------------------------------------------------------
-
     overlay.style.position =
       'absolute';
 
     overlay.style.left =
-      `${inputRect.left - parentRect.left}px`;
+      `${inputRect.left -
+        parentRect.left}px`;
 
     overlay.style.top =
-      `${inputRect.top - parentRect.top}px`;
+      `${inputRect.top -
+        parentRect.top}px`;
 
     overlay.style.width =
       `${inputRect.width}px`;
@@ -1112,10 +1785,6 @@
     overlay.style.transform =
       `translate(${-input.scrollLeft}px, ${-input.scrollTop}px)`;
 
-    // ----------------------------------------------------------
-    // 위험 표현 위치 계산
-    // ----------------------------------------------------------
-
     const beforeText =
       text.slice(
         0,
@@ -1129,10 +1798,14 @@
       );
 
     const canvas =
-      document.createElement('canvas');
+      document.createElement(
+        'canvas'
+      );
 
     const context =
-      canvas.getContext('2d');
+      canvas.getContext(
+        '2d'
+      );
 
     if (!context) {
       return null;
@@ -1146,20 +1819,30 @@
       beforeText.split('\n');
 
     const currentLine =
-      lines[lines.length - 1] || '';
+      lines[
+        lines.length - 1
+      ] || '';
 
     const lineIndex =
       lines.length - 1;
 
     const lineHeight =
-      parseFloat(style.lineHeight) ||
-      parseFloat(style.fontSize) * 1.4;
+      parseFloat(
+        style.lineHeight
+      ) ||
+      parseFloat(
+        style.fontSize
+      ) * 1.4;
 
     const paddingLeft =
-      parseFloat(style.paddingLeft) || 0;
+      parseFloat(
+        style.paddingLeft
+      ) || 0;
 
     const paddingTop =
-      parseFloat(style.paddingTop) || 0;
+      parseFloat(
+        style.paddingTop
+      ) || 0;
 
     const beforeWidth =
       context.measureText(
@@ -1171,12 +1854,10 @@
         detectedText
       ).width;
 
-    // ----------------------------------------------------------
-    // 빨간 밑줄
-    // ----------------------------------------------------------
-
     const underline =
-      document.createElement('div');
+      document.createElement(
+        'div'
+      );
 
     underline.className =
       'op-detected-expression';
@@ -1188,13 +1869,19 @@
       'absolute';
 
     underline.style.left =
-      `${paddingLeft + beforeWidth}px`;
+      `${paddingLeft +
+        beforeWidth}px`;
 
     underline.style.top =
-      `${paddingTop + lineIndex * lineHeight}px`;
+      `${paddingTop +
+        lineIndex *
+          lineHeight}px`;
 
     underline.style.width =
-      `${Math.max(detectedWidth, 4)}px`;
+      `${Math.max(
+        detectedWidth,
+        4
+      )}px`;
 
     underline.style.height =
       `${lineHeight}px`;
@@ -1217,19 +1904,14 @@
     underline.style.zIndex =
       '20';
 
-    // ★ 빨간색 밑줄
     underline.style.boxShadow =
       'inset 0 -2px 0 #ff4d67';
-
-    // ----------------------------------------------------------
-    // Hover
-    // ----------------------------------------------------------
 
     underline.addEventListener(
       'mouseenter',
       () => {
         underline.style.background =
-          'rgba(128, 128, 128, 0.18)';
+          'rgba(128,128,128,0.18)';
 
         underline.style.boxShadow =
           'inset 0 -2px 0 #ff4d67';
@@ -1246,10 +1928,6 @@
           'inset 0 -2px 0 #ff4d67';
       }
     );
-
-    // ----------------------------------------------------------
-    // 클릭
-    // ----------------------------------------------------------
 
     underline.addEventListener(
       'mousedown',
@@ -1272,7 +1950,9 @@
           'op-detected-expression-active'
         );
 
-        if (currentAnalysis?.risky) {
+        if (
+          currentAnalysis?.risky
+        ) {
           showWarning(
             input,
             currentAnalysis
@@ -1280,10 +1960,6 @@
         }
       }
     );
-
-    // ----------------------------------------------------------
-    // Overlay 삽입
-    // ----------------------------------------------------------
 
     overlay.appendChild(
       underline
@@ -1296,14 +1972,11 @@
     currentOverlay =
       overlay;
 
-    // ----------------------------------------------------------
-    // 위치 동기화
-    // ----------------------------------------------------------
-
     const sync = () => {
       if (
         !currentOverlay ||
-        currentOverlay !== overlay
+        currentOverlay !==
+          overlay
       ) {
         return;
       }
@@ -1315,10 +1988,12 @@
         parent.getBoundingClientRect();
 
       overlay.style.left =
-        `${rect.left - pRect.left}px`;
+        `${rect.left -
+          pRect.left}px`;
 
       overlay.style.top =
-        `${rect.top - pRect.top}px`;
+        `${rect.top -
+          pRect.top}px`;
 
       overlay.style.width =
         `${rect.width}px`;
@@ -1367,10 +2042,12 @@
     }
 
     const input =
-      currentOverlay._onepaceInput;
+      currentOverlay
+        ._onepaceInput;
 
     const sync =
-      currentOverlay._onepaceSync;
+      currentOverlay
+        ._onepaceSync;
 
     if (
       input &&
@@ -1423,10 +2100,6 @@
         ''
       ).trim();
 
-    // ----------------------------------------------------------
-    // detectedExpression이 실제 입력에 존재
-    // ----------------------------------------------------------
-
     if (expression) {
       const range =
         findDetectedExpressionRange(
@@ -1465,11 +2138,6 @@
         return;
       }
     }
-
-    // ----------------------------------------------------------
-    // detectedExpression을 찾지 못한 경우
-    // 전체 텍스트에 밑줄
-    // ----------------------------------------------------------
 
     const fullRange = {
       start: 0,
@@ -1517,12 +2185,15 @@
       bubble.getBoundingClientRect();
 
     const bubbleWidth =
-      bubbleRect.width || 330;
+      bubbleRect.width ||
+      330;
 
     const bubbleHeight =
-      bubbleRect.height || 220;
+      bubbleRect.height ||
+      220;
 
-    const gap = 10;
+    const gap =
+      10;
 
     let left =
       rect.left;
@@ -1542,7 +2213,9 @@
 
         if (range) {
           const style =
-            getComputedStyle(input);
+            getComputedStyle(
+              input
+            );
 
           const canvas =
             document.createElement(
@@ -1550,7 +2223,9 @@
             );
 
           const context =
-            canvas.getContext('2d');
+            canvas.getContext(
+              '2d'
+            );
 
           if (context) {
             context.font =
@@ -1575,7 +2250,7 @@
                 Math.max(
                   0,
                   rect.width -
-                  bubbleWidth
+                    bubbleWidth
                 )
               );
           }
@@ -1605,7 +2280,9 @@
       bubbleHeight -
       gap;
 
-    if (top < 16) {
+    if (
+      top < 16
+    ) {
       top =
         rect.bottom +
         gap;
@@ -1675,13 +2352,17 @@
     }
 
     const wrapper =
-      document.createElement('div');
+      document.createElement(
+        'div'
+      );
 
     wrapper.id =
       WARNING_ID;
 
     wrapper.appendChild(
-      template.content.cloneNode(true)
+      template.content.cloneNode(
+        true
+      )
     );
 
     const backdrop =
@@ -1697,6 +2378,16 @@
     const country =
       wrapper.querySelector(
         '.onepace-warning-country'
+      );
+
+    const countryTime =
+      wrapper.querySelector(
+        '.onepace-warning-country-time'
+      );
+
+    const titleText =
+      wrapper.querySelector(
+        '.onepace-warning-title-text'
       );
 
     const reason =
@@ -1724,19 +2415,92 @@
         '.onepace-use-suggestion'
       );
 
-    // ----------------------------------------------------------
-    // 국가
-    // ----------------------------------------------------------
+    const closeButton =
+      wrapper.querySelector(
+        '.onepace-warning-close-btn'
+      );
 
-    if (country) {
-      country.textContent =
-        analysis.country?.nationality ||
+    // ==========================================================
+    // 국가명 / Business Culture / 현지시간
+    // ==========================================================
+
+    if (analysis.country) {
+      const countryName =
+        analysis.country.name ||
         '';
+
+      const nationality =
+        analysis.country.nationality ||
+        '';
+
+      const code =
+        analysis.country.code ||
+        '';
+
+      const businessCultureName =
+        code === 'US'
+          ? 'US Business Culture'
+          : code === 'GB'
+          ? 'UK Business Culture'
+          : code === 'KR'
+          ? 'Korean Business Culture'
+          : code === 'FR'
+          ? 'French Business Culture'
+          : code === 'DE'
+          ? 'German Business Culture'
+          : code === 'JP'
+          ? 'Japanese Business Culture'
+          : code === 'CN'
+          ? 'Chinese Business Culture'
+          : code === 'CA'
+          ? 'Canadian Business Culture'
+          : code === 'AU'
+          ? 'Australian Business Culture'
+          : `${countryName} Business Culture`;
+
+      if (titleText) {
+        titleText.textContent =
+          businessCultureName;
+      }
+
+      if (country) {
+        country.textContent =
+          nationality;
+      }
+
+      if (countryTime) {
+        const localTime =
+          getLocalTime(
+            analysis.country.timezone
+          );
+
+        const cityName =
+          code === 'GB'
+            ? '런던'
+            : code === 'US'
+            ? '뉴욕'
+            : code === 'FR'
+            ? '파리'
+            : code === 'DE'
+            ? '베를린'
+            : code === 'JP'
+            ? '도쿄'
+            : code === 'CN'
+            ? '상하이'
+            : code === 'CA'
+            ? '토론토'
+            : code === 'AU'
+            ? '시드니'
+            : countryName;
+
+        countryTime.textContent =
+          `⏰ ${cityName} ${localTime}`;
+      }
     }
 
-    // ----------------------------------------------------------
+    // ==========================================================
     // 이유
-    // ----------------------------------------------------------
+    // ==========================================================
 
     if (reason) {
       reason.textContent =
@@ -1745,9 +2509,9 @@
         '문화적 맥락에 따라 다르게 받아들여질 수 있어요.';
     }
 
-    // ----------------------------------------------------------
+    // ==========================================================
     // 원문
-    // ----------------------------------------------------------
+    // ==========================================================
 
     if (original) {
       original.textContent =
@@ -1757,9 +2521,9 @@
         getText(input).trim();
     }
 
-    // ----------------------------------------------------------
-    // 제안
-    // ----------------------------------------------------------
+    // ==========================================================
+    // 수정 제안
+    // ==========================================================
 
     if (suggestion) {
       suggestion.textContent =
@@ -1767,9 +2531,25 @@
         '';
     }
 
-    // ----------------------------------------------------------
+    // ==========================================================
+    // 닫기
+    // ==========================================================
+
+    if (closeButton) {
+      closeButton.addEventListener(
+        'click',
+        event => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          removeWarning();
+        }
+      );
+    }
+
+    // ==========================================================
     // 그냥 보내기
-    // ----------------------------------------------------------
+    // ==========================================================
 
     if (sendAnyway) {
       sendAnyway.addEventListener(
@@ -1783,9 +2563,9 @@
       );
     }
 
-    // ----------------------------------------------------------
-    // 제안 사용
-    // ----------------------------------------------------------
+    // ==========================================================
+    // Accept
+    // ==========================================================
 
     if (useSuggestion) {
       useSuggestion.addEventListener(
@@ -1805,6 +2585,10 @@
             return;
           }
 
+          // ----------------------------------------------------
+          // 재분석 방지
+          // ----------------------------------------------------
+
           suppressedText =
             suggestedText;
 
@@ -1814,10 +2598,18 @@
           latestRequestKey =
             lastAnalysisKey;
 
+          // ----------------------------------------------------
+          // 입력창 수정
+          // ----------------------------------------------------
+
           setText(
             input,
             suggestedText
           );
+
+          // ----------------------------------------------------
+          // 현재 분석 상태
+          // ----------------------------------------------------
 
           currentAnalysis =
             analysis;
@@ -1833,6 +2625,10 @@
 
           activeComposer =
             input;
+
+          // ----------------------------------------------------
+          // 커서 이동
+          // ----------------------------------------------------
 
           try {
             input.focus();
@@ -1850,13 +2646,16 @@
                 input
               );
 
-              range.collapse(false);
+              range.collapse(
+                false
+              );
 
               selection.removeAllRanges();
 
               selection.addRange(
                 range
               );
+
             } else {
               input.setSelectionRange(
                 input.value.length,
@@ -1864,13 +2663,32 @@
               );
             }
           } catch {}
+
+          // ----------------------------------------------------
+          // 수정된 문장 뒤에 민트색 박스 표시
+          // ----------------------------------------------------
+
+          requestAnimationFrame(() => {
+            showAcceptedHighlight(
+              input,
+              suggestedText
+            );
+
+            // --------------------------------------------------
+            // ★ Accept 후 화면 하단 Toast 표시
+            // --------------------------------------------------
+
+            showAcceptToast(
+              suggestedText
+            );
+          });
         }
       );
     }
 
-    // ----------------------------------------------------------
+    // ==========================================================
     // Backdrop
-    // ----------------------------------------------------------
+    // ==========================================================
 
     if (backdrop) {
       backdrop.addEventListener(
@@ -1996,33 +2814,26 @@
     activeComposer =
       input;
 
-    // ----------------------------------------------------------
     // 비활성
-    // ----------------------------------------------------------
-
     if (!enabled) {
       removeHighlight();
       removeWarning();
       return;
     }
 
-    // ----------------------------------------------------------
     // 국가 미선택
-    // ----------------------------------------------------------
-
     if (!selectedCountry) {
       removeHighlight();
       removeWarning();
 
-      lastAnalysisKey = '';
-      latestRequestKey = '';
+      lastAnalysisKey =
+        '';
+
+      latestRequestKey =
+        '';
 
       return;
     }
-
-    // ----------------------------------------------------------
-    // 메시지
-    // ----------------------------------------------------------
 
     const message =
       getText(input).trim();
@@ -2031,26 +2842,32 @@
       removeHighlight();
       removeWarning();
 
-      lastAnalysisKey = '';
-      latestRequestKey = '';
+      lastAnalysisKey =
+        '';
 
-      suppressedText = '';
+      latestRequestKey =
+        '';
 
-      currentAnalysis = null;
+      suppressedText =
+        '';
 
-      currentDetectedExpression = '';
-      activeDetectedExpression = '';
+      currentAnalysis =
+        null;
+
+      currentDetectedExpression =
+        '';
+
+      activeDetectedExpression =
+        '';
 
       return;
     }
 
-    // ----------------------------------------------------------
-    // 제안문 적용 직후 재분석 방지
-    // ----------------------------------------------------------
-
+    // Accept 직후 재분석 방지
     if (
       suppressedText &&
-      message === suppressedText
+      message ===
+        suppressedText
     ) {
       removeHighlight();
       removeWarning();
@@ -2059,14 +2876,12 @@
 
     if (
       suppressedText &&
-      message !== suppressedText
+      message !==
+        suppressedText
     ) {
-      suppressedText = '';
+      suppressedText =
+        '';
     }
-
-    // ----------------------------------------------------------
-    // 동일 요청 방지
-    // ----------------------------------------------------------
 
     const analysisKey =
       `${selectedCountry.code}:${message}`;
@@ -2089,19 +2904,11 @@
       message
     );
 
-    // ----------------------------------------------------------
-    // API
-    // ----------------------------------------------------------
-
     const analysis =
       await analyzeMessage(
         message,
         selectedCountry
       );
-
-    // ----------------------------------------------------------
-    // 최신 요청인지 확인
-    // ----------------------------------------------------------
 
     if (
       analysisKey !==
@@ -2120,10 +2927,6 @@
       return;
     }
 
-    // ----------------------------------------------------------
-    // 분석 결과 저장
-    // ----------------------------------------------------------
-
     currentAnalysis =
       analysis;
 
@@ -2131,10 +2934,6 @@
       '[ONEPACE] 분석 결과:',
       analysis
     );
-
-    // ----------------------------------------------------------
-    // 위험 없음
-    // ----------------------------------------------------------
 
     if (!analysis.risky) {
       removeHighlight();
@@ -2148,10 +2947,6 @@
 
       return;
     }
-
-    // ----------------------------------------------------------
-    // 위험 표현 표시
-    // ----------------------------------------------------------
 
     showHighlight(
       input,
@@ -2206,7 +3001,8 @@
 
     if (
       actualComposer &&
-      actualComposer !== composer
+      actualComposer !==
+        composer
     ) {
       return;
     }
@@ -2215,11 +3011,12 @@
       composer;
 
     // 사용자가 다시 입력하면
-    // 기존 결과 제거
+    // Accept highlight 제거
+    removeAcceptedHighlight();
+
     removeHighlight();
     removeWarning();
 
-    // 새로운 입력 분석
     scheduleAnalysis();
   }
 
@@ -2276,7 +3073,9 @@
       if (!target) return;
 
       const button =
-        target.closest?.('button');
+        target.closest?.(
+          'button'
+        );
 
       if (!button) return;
 
@@ -2304,12 +3103,17 @@
             getText(input).trim();
 
           if (!currentText) {
-            suppressedText = '';
+            suppressedText =
+              '';
 
-            lastAnalysisKey = '';
-            latestRequestKey = '';
+            lastAnalysisKey =
+              '';
 
-            currentAnalysis = null;
+            latestRequestKey =
+              '';
+
+            currentAnalysis =
+              null;
 
             currentDetectedExpression =
               '';
@@ -2319,6 +3123,7 @@
 
             removeHighlight();
             removeWarning();
+            removeAcceptedHighlight();
           }
         }, 100);
       }
@@ -2363,14 +3168,20 @@
       analysisTimer
     );
 
-    analysisTimer = null;
+    analysisTimer =
+      null;
 
-    lastAnalysisKey = '';
-    latestRequestKey = '';
+    lastAnalysisKey =
+      '';
 
-    suppressedText = '';
+    latestRequestKey =
+      '';
 
-    currentAnalysis = null;
+    suppressedText =
+      '';
+
+    currentAnalysis =
+      null;
 
     currentDetectedExpression =
       '';
@@ -2380,6 +3191,18 @@
 
     removeHighlight();
     removeWarning();
+    removeAcceptedHighlight();
+
+    // Toast도 제거
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+
+    if (currentToast) {
+      currentToast.remove();
+      currentToast = null;
+    }
 
     document
       .querySelectorAll(
@@ -2389,8 +3212,11 @@
         element.remove();
       });
 
-    composerRoot = null;
-    activeComposer = null;
+    composerRoot =
+      null;
+
+    activeComposer =
+      null;
   }
 
   // ============================================================
@@ -2423,7 +3249,8 @@
         message?.action ===
         'enable_onepace'
       ) {
-        enabled = true;
+        enabled =
+          true;
 
         scan();
 
@@ -2438,7 +3265,8 @@
         message?.action ===
         'disable_onepace'
       ) {
-        enabled = false;
+        enabled =
+          false;
 
         removeAll();
 
@@ -2458,17 +3286,18 @@
   chrome.storage.local.get(
     'onepaceEnabled',
     result => {
-      // 저장된 값이 없으면 최초 실행
       if (
         typeof result.onepaceEnabled !==
         'boolean'
       ) {
         chrome.storage.local.set(
           {
-            onepaceEnabled: true
+            onepaceEnabled:
+              true
           },
           () => {
-            enabled = true;
+            enabled =
+              true;
 
             console.log(
               '[ONEPACE] 최초 실행 → 활성화:',
@@ -2483,7 +3312,8 @@
       }
 
       enabled =
-        result.onepaceEnabled === true;
+        result.onepaceEnabled ===
+        true;
 
       console.log(
         '[ONEPACE] storage 값:',
@@ -2543,53 +3373,103 @@
     if (!selectedCountry) return;
 
     updateCountryStatus();
+
+    const warning =
+      document.getElementById(
+        WARNING_ID
+      );
+
+    if (
+      warning &&
+      currentAnalysis?.country
+    ) {
+      const countryTime =
+        warning.querySelector(
+          '.onepace-warning-country-time'
+        );
+
+      if (countryTime) {
+        const code =
+          currentAnalysis.country.code;
+
+        const cityName =
+          code === 'GB'
+            ? '런던'
+            : code === 'US'
+            ? '뉴욕'
+            : code === 'FR'
+            ? '파리'
+            : code === 'DE'
+            ? '베를린'
+            : code === 'JP'
+            ? '도쿄'
+            : code === 'CN'
+            ? '상하이'
+            : code === 'CA'
+            ? '토론토'
+            : code === 'AU'
+            ? '시드니'
+            : currentAnalysis.country.name;
+
+        countryTime.textContent =
+          `⏰ ${cityName} ${getLocalTime(
+            currentAnalysis.country.timezone
+          )}`;
+      }
+    }
   }, 30000);
 
   // ============================================================
   // DOM Observer
   // ============================================================
 
-  let observerTimer = null;
+  let observerTimer =
+    null;
 
   const observer =
-    new MutationObserver(() => {
-      if (!enabled) return;
+    new MutationObserver(
+      () => {
+        if (!enabled) return;
 
-      if (observerTimer) return;
+        if (observerTimer) return;
 
-      observerTimer =
-        setTimeout(() => {
-          observerTimer = null;
+        observerTimer =
+          setTimeout(() => {
+            observerTimer =
+              null;
 
-          const currentInput =
-            findComposer();
+            const currentInput =
+              findComposer();
 
-          if (!currentInput) return;
+            if (!currentInput) return;
 
-          if (
-            currentInput !==
-            activeComposer
-          ) {
-            activeComposer =
-              currentInput;
+            if (
+              currentInput !==
+              activeComposer
+            ) {
+              activeComposer =
+                currentInput;
 
-            removeHighlight();
-            removeWarning();
+              removeHighlight();
+              removeWarning();
+              removeAcceptedHighlight();
 
-            createComposerUI(
-              currentInput
-            );
-          } else if (
-            !document.getElementById(
-              ROOT_ID
-            )
-          ) {
-            createComposerUI(
-              currentInput
-            );
-          }
-        }, 300);
-    });
+              createComposerUI(
+                currentInput
+              );
+
+            } else if (
+              !document.getElementById(
+                ROOT_ID
+              )
+            ) {
+              createComposerUI(
+                currentInput
+              );
+            }
+          }, 300);
+      }
+    );
 
   observer.observe(
     document.documentElement,
@@ -2608,4 +3488,5 @@
   console.log(
     '[ONEPACE] Highlight-based AI analysis connected'
   );
+
 })();
