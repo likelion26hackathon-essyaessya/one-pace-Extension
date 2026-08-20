@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ONEPACE — Slack Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="workspace">
+        <div class="workspace-avatar">O</div>
+        <div class="workspace-info">
+          <strong>ONEPACE</strong>
+          <span>Global Team</span>
+        </div>
+        <button class="icon-btn" aria-label="워크스페이스 메뉴">⌄</button>
+      </div>
+
+      <div class="sidebar-section quick">
+        <button>🏠 <span>홈</span></button>
+        <button>💬 <span>DM</span></button>
+        <button>🔔 <span>활동</span></button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>채널</span>
+          <button class="plus-btn">＋</button>
+        </div>
+        <button class="channel active" data-channel="general"># general</button>
+        <button class="channel" data-channel="design"># design</button>
+        <button class="channel" data-channel="development"># development</button>
+        <button class="channel" data-channel="marketing"># marketing</button>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>DM</span>
+          <button class="plus-btn">＋</button>
+        </div>
+        <button class="person"><i class="status online"></i> Emma</button>
+        <button class="person"><i class="status online"></i> James</button>
+        <button class="person"><i class="status away"></i> Sarah</button>
+      </div>
+
+      <div class="profile">
+        <div class="avatar me">Y</div>
+        <div>
+          <strong>You</strong>
+          <span>온라인</span>
+        </div>
+        <i class="status online"></i>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="channel-title">
+          <span class="hash">#</span>
+          <div>
+            <h1 id="channelName">general</h1>
+            <span id="channelDescription">팀 전체 공지와 일상적인 대화를 위한 채널</span>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button class="top-btn">🔍</button>
+          <button class="top-btn">👥</button>
+          <button class="top-btn">⚙</button>
+        </div>
+      </header>
+
+      <section class="messages" id="messages">
+        <div class="channel-intro">
+          <div class="large-hash">#</div>
+          <h2 id="introTitle">general에 오신 것을 환영합니다!</h2>
+          <p>이곳은 ONEPACE 글로벌 팀의 기본 채널입니다.</p>
+        </div>
+
+        <article class="message">
+          <div class="avatar emma">E</div>
+          <div class="message-content">
+            <div class="message-meta"><strong>Emma</strong><span>오전 10:24</span></div>
+            <p>Hi everyone! We need to finalize the landing page this week.</p>
+          </div>
+        </article>
+
+        <article class="message">
+          <div class="avatar james">J</div>
+          <div class="message-content">
+            <div class="message-meta"><strong>James</strong><span>오전 10:27</span></div>
+            <p>Could we finish the design today? We need to move on to development.</p>
+          </div>
+        </article>
+
+        <article class="message">
+          <div class="avatar sarah">S</div>
+          <div class="message-content">
+            <div class="message-meta"><strong>Sarah</strong><span>오전 10:31</span></div>
+            <p>I think that should be possible. I'll check with the design team.</p>
+          </div>
+        </article>
+      </section>
+
+      <div class="composer-wrap">
+        <div class="composer">
+          <div class="composer-tools">
+            <button>＋</button>
+            <button>B</button>
+            <button><i>I</i></button>
+            <button>🔗</button>
+            <button>😊</button>
+          </div>
+          <textarea id="messageInput" rows="2" placeholder="메시지를 입력하세요"></textarea>
+          <div class="composer-bottom">
+            <div class="composer-hint">Enter로 메시지 보내기</div>
+            <button class="send-btn" id="sendBtn">➤</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="right-panel hidden" id="rightPanel">
+      <div class="panel-header">
+        <strong>ONEPACE</strong>
+        <button id="closePanel">×</button>
+      </div>
+      <div class="panel-body">
+        <div class="ai-badge">✦ AI</div>
+        <h2>AI 요약</h2>
+        <p class="muted">현재 채널의 대화를 업무 기준으로 정리합니다.</p>
+
+        <label>요약 기준</label>
+        <div class="select">목표 / 담당자 / 시작·종료 기간 <span>⌄</span></div>
+
+        <button class="primary" id="summaryBtn">AI 요약 요청</button>
+
+        <div class="summary-result hidden" id="summaryResult">
+          <div class="result-title">요약 결과</div>
+          <div class="result-item">
+            <span>목표</span>
+            <strong>Landing page 디자인 최종 확정</strong>
+          </div>
+          <div class="result-item">
+            <span>담당자</span>
+            <strong>Design Team</strong>
+          </div>
+          <div class="result-item">
+            <span>기간</span>
+            <strong>이번 주</strong>
+          </div>
+          <div class="result-item">
+            <span>Action Item</span>
+            <strong>오늘까지 디자인 가능 여부 확인</strong>
+          </div>
+          <button class="secondary" id="postSummary">확인 및 채널 전송</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
