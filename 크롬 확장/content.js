@@ -2,10 +2,30 @@
   'use strict';
 
   // ============================================================
-  // ONEPACE CONTENT SCRIPT
+  // ONE PACE CONTENT SCRIPT
+  //
+  // content-ui.html + content.css 기준
+  //
+  // 역할
+  // 1. 상대 국가 선택
+  // 2. 국가 상태 표시
+  // 3. 입력값 실시간 분석
+  // 4. API riskDetected 처리
+  // 5. 오해 가능성 말풍선 표시
+  // 6. 추천 표현 적용
+  //
+  // API
+  // https://api.onepace.site/api/culture-translation/analyze
   // ============================================================
 
-  if (window.top !== window.self) return;
+
+  // ============================================================
+  // 중복 실행 방지
+  // ============================================================
+
+  if (window.top !== window.self) {
+    return;
+  }
 
   if (
     document.documentElement.dataset.onepaceLoaded === 'true'
@@ -14,6 +34,26 @@
   }
 
   document.documentElement.dataset.onepaceLoaded = 'true';
+
+
+  // ============================================================
+  // 설정
+  // ============================================================
+
+  const ROOT_ID = 'onepace-global-root';
+  const WARNING_ID = 'onepace-realtime-warning';
+
+  const COMPOSER_TEMPLATE_ID =
+    'onepace-composer-template';
+
+  const WARNING_TEMPLATE_ID =
+    'onepace-warning-template';
+
+  const UI_FILE =
+    'content-ui.html';
+
+  const ANALYZE_ENDPOINT =
+    'https://api.onepace.site/api/culture-translation/analyze';
 
 
   // ============================================================
@@ -168,41 +208,23 @@
   // 상태
   // ============================================================
 
-  const ROOT_ID = 'onepace-global-root';
-  const WARNING_ID = 'onepace-realtime-warning';
-
-  const ANALYZE_ENDPOINT =
-    'https://api.onepace.site/api/culture-translation/analyze';
-
   let enabled = true;
+
   let selectedCountry = null;
+
   let activeComposer = null;
 
+  let composerRoot = null;
+
   let analysisTimer = null;
-  let lastAnalysisKey = '';
+
   let latestRequestKey = '';
 
-  let observerTimer = null;
-  let repositionTimer = null;
+  let lastAnalysisKey = '';
 
+  let templateLoaded = false;
 
-  // ============================================================
-  // 텍스트 읽기
-  // ============================================================
-
-  function getText(element) {
-    if (!element) return '';
-
-    if (element.isContentEditable) {
-      return (
-        element.innerText ||
-        element.textContent ||
-        ''
-      );
-    }
-
-    return element.value || '';
-  }
+  let templateLoadingPromise = null;
 
 
   // ============================================================
@@ -210,7 +232,7 @@
   // ============================================================
 
   function escapeHtml(value) {
-    return String(value).replace(
+    return String(value ?? '').replace(
       /[&<>'"]/g,
       (character) => {
         const map = {
@@ -228,157 +250,110 @@
 
 
   // ============================================================
-  // AI 분석 API
-  //
-  // POST
-  // {
-  //   text: "...",
-  //   counterpartCountry: "US"
-  // }
-  //
-  // RESPONSE
-  // {
-  //   id: 0,
-  //   riskDetected: true,
-  //   detectedExpression: "...",
-  //   realtimeDetection: "...",
-  //   nuanceExplanation: "...",
-  //   suggestedText: "..."
-  // }
+  // 입력값 읽기
   // ============================================================
 
-  async function analyzeMessage(message, country) {
-
-    console.log('[ONEPACE] API 요청 시작');
-    console.log('[ONEPACE] text:', message);
-    console.log('[ONEPACE] country:', country);
-
-    if (!message || !country) {
-
-      console.log(
-        '[ONEPACE] message 또는 country 없음'
-      );
-
-      return {
-        risky: false,
-        country
-      };
+  function getText(element) {
+    if (!element) {
+      return '';
     }
 
+    if (element.isContentEditable) {
+      return (
+        element.innerText ||
+        element.textContent ||
+        ''
+      );
+    }
+
+    return element.value || '';
+  }
+
+
+  // ============================================================
+  // 입력값 변경
+  // ============================================================
+
+  function setText(element, text) {
+    if (!element) {
+      return;
+    }
+
+    const value = String(text ?? '');
+
+    if (element.isContentEditable) {
+      element.focus();
+
+      element.textContent = value;
+
+      element.dispatchEvent(
+        new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+          data: value
+        })
+      );
+
+      return;
+    }
+
+    element.focus();
+
+    const prototype =
+      Object.getPrototypeOf(element);
+
+    const valueSetter =
+      Object.getOwnPropertyDescriptor(
+        prototype,
+        'value'
+      )?.set;
+
+    if (valueSetter) {
+      valueSetter.call(
+        element,
+        value
+      );
+    } else {
+      element.value = value;
+    }
+
+    element.dispatchEvent(
+      new Event('input', {
+        bubbles: true
+      })
+    );
+
+    element.dispatchEvent(
+      new Event('change', {
+        bubbles: true
+      })
+    );
+  }
+
+
+  // ============================================================
+  // 현지 시간
+  // ============================================================
+
+  function getLocalTime(timezone) {
     try {
-
-      console.log(
-        '[ONEPACE] API 호출:',
-        ANALYZE_ENDPOINT
-      );
-
-      const response = await fetch(
-        ANALYZE_ENDPOINT,
+      return new Intl.DateTimeFormat(
+        'ko-KR',
         {
-          method: 'POST',
-
-          headers: {
-            'Content-Type': 'application/json'
-          },
-
-          body: JSON.stringify({
-            text: message,
-            counterpartCountry: country.code
-          })
+          timeZone: timezone,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
         }
-      );
-
-      console.log(
-        '[ONEPACE] API status:',
-        response.status
-      );
-
-      if (!response.ok) {
-
-        const errorText =
-          await response.text().catch(() => '');
-
-        console.warn(
-          '[ONEPACE] 분석 API 응답 오류:',
-          response.status,
-          errorText
-        );
-
-        return {
-          risky: false,
-          country
-        };
-      }
-
-      const data =
-        await response.json();
-
-      console.log(
-        '[ONEPACE] API response:',
-        data
-      );
-
-
-      // ----------------------------------------------------------
-      // 위험 없음
-      // ----------------------------------------------------------
-
-      if (!data.riskDetected) {
-
-        console.log(
-          '[ONEPACE] 오해 가능성 없음'
-        );
-
-        return {
-          risky: false,
-          country
-        };
-      }
-
-
-      // ----------------------------------------------------------
-      // 위험 있음
-      // ----------------------------------------------------------
-
-      console.log(
-        '[ONEPACE] 오해 가능성 감지:',
-        data.detectedExpression
-      );
-
-      return {
-        risky: true,
-        country,
-
-        detectedExpression:
-          data.detectedExpression || '',
-
-        realtimeDetection:
-          data.realtimeDetection || '',
-
-        nuanceExplanation:
-          data.nuanceExplanation || '',
-
-        suggestedText:
-          data.suggestedText || ''
-      };
-
-    } catch (error) {
-
-      console.error(
-        '[ONEPACE] 분석 API 호출 실패:',
-        error
-      );
-
-      return {
-        risky: false,
-        country
-      };
+      ).format(new Date());
+    } catch {
+      return '--:--';
     }
   }
 
 
   // ============================================================
-  // 메시지 입력창 찾기
+  // Composer 찾기
   // ============================================================
 
   function findComposer() {
@@ -394,18 +369,33 @@
       'textarea'
     ];
 
+
     for (const selector of selectors) {
 
       const elements =
         document.querySelectorAll(selector);
 
+
       for (const element of elements) {
+
+        if (!element) {
+          continue;
+        }
+
+        if (
+          element.closest('#onepace-global-root') ||
+          element.closest('#onepace-realtime-warning')
+        ) {
+          continue;
+        }
+
 
         const rect =
           element.getBoundingClientRect();
 
         const style =
           getComputedStyle(element);
+
 
         if (
           rect.width > 80 &&
@@ -415,7 +405,9 @@
         ) {
           return element;
         }
+
       }
+
     }
 
     return null;
@@ -423,190 +415,371 @@
 
 
   // ============================================================
-  // 입력창 컨테이너
+  // Composer Container
   // ============================================================
 
   function findComposerContainer(input) {
 
-    if (!input) return null;
+    if (!input) {
+      return null;
+    }
 
-    return (
+
+    const container =
       input.closest(
         '[data-onepace-composer-container]'
       ) ||
       input.closest('.composer') ||
       input.closest('.composer-wrap') ||
-      input.closest(
-        '[data-qa="message_input_container"]'
-      ) ||
-      input.parentElement
+      input.closest('[data-qa="message_input_container"]');
+
+
+    if (container) {
+      return container;
+    }
+
+
+    return input.parentElement;
+  }
+
+
+  // ============================================================
+  // Template 확인
+  // ============================================================
+
+  function templatesExist() {
+
+    return Boolean(
+      document.getElementById(
+        COMPOSER_TEMPLATE_ID
+      ) &&
+      document.getElementById(
+        WARNING_TEMPLATE_ID
+      )
     );
   }
 
 
   // ============================================================
-  // ONEPACE 국가 UI 생성
+  // content-ui.html 로드
   // ============================================================
 
-  function findOrCreateRoot(input) {
+  async function ensureTemplates() {
+
+    if (templatesExist()) {
+
+      templateLoaded = true;
+
+      return true;
+    }
+
+
+    if (templateLoaded) {
+      return true;
+    }
+
+
+    if (templateLoadingPromise) {
+      return templateLoadingPromise;
+    }
+
+
+    templateLoadingPromise =
+      (async () => {
+
+        try {
+
+          const resourceUrl =
+            chrome.runtime.getURL(UI_FILE);
+
+
+          console.log(
+            '[ONEPACE] UI template loading:',
+            resourceUrl
+          );
+
+
+          const response =
+            await fetch(resourceUrl);
+
+
+          if (!response.ok) {
+
+            throw new Error(
+              `UI template HTTP ${response.status}`
+            );
+
+          }
+
+
+          const html =
+            await response.text();
+
+
+          const wrapper =
+            document.createElement('div');
+
+
+          wrapper.innerHTML = html;
+
+
+          const templates =
+            wrapper.querySelectorAll('template');
+
+
+          templates.forEach((template) => {
+
+            document.body.appendChild(
+              template.cloneNode(true)
+            );
+
+          });
+
+
+          if (!templatesExist()) {
+
+            throw new Error(
+              'ONEPACE template을 찾을 수 없습니다.'
+            );
+
+          }
+
+
+          templateLoaded = true;
+
+
+          console.log(
+            '[ONEPACE] UI template loaded'
+          );
+
+
+          return true;
+
+        } catch (error) {
+
+          console.error(
+            '[ONEPACE] UI template 로드 실패:',
+            error
+          );
+
+          return false;
+
+        }
+
+      })();
+
+
+    try {
+
+      return await templateLoadingPromise;
+
+    } finally {
+
+      templateLoadingPromise = null;
+
+    }
+  }
+
+
+  // ============================================================
+  // Composer UI 생성
+  // ============================================================
+
+  async function createComposerUI(input) {
+
+    if (!input) {
+      return null;
+    }
+
 
     const container =
       findComposerContainer(input);
 
-    if (!container) return null;
 
-    const computed =
-      getComputedStyle(container);
-
-    if (computed.position === 'static') {
-      container.style.position = 'relative';
+    if (!container) {
+      return null;
     }
 
-    if (computed.overflow === 'hidden') {
-      container.style.overflow = 'visible';
-    }
 
-    let root =
+    let existing =
       container.querySelector(
         `#${ROOT_ID}`
       );
 
-    if (root) {
-      return root;
+
+    if (existing) {
+
+      composerRoot = existing;
+
+      return existing;
     }
 
-    root =
+
+    const loaded =
+      await ensureTemplates();
+
+
+    if (!loaded) {
+      return null;
+    }
+
+
+    const template =
+      document.getElementById(
+        COMPOSER_TEMPLATE_ID
+      );
+
+
+    if (!template) {
+      return null;
+    }
+
+
+    const root =
       document.createElement('div');
+
 
     root.id = ROOT_ID;
 
-    root.innerHTML = `
-      <div class="op-row">
 
-        <button
-          type="button"
-          class="onepace-globe-button"
-          aria-label="대화 상대 국적 선택"
-          title="대화 상대 국적 선택"
-        >🌐</button>
+    const fragment =
+      template.content.cloneNode(true);
 
-        <span class="op-status">
 
-          <strong class="op-status-name"></strong>
+    root.appendChild(fragment);
 
-          <span>
-            과 대화하는 중이에요.
-          </span>
 
-          <span class="op-status-time"></span>
+    const computed =
+      getComputedStyle(container);
 
-        </span>
 
-        <div class="op-picker">
+    if (
+      computed.position === 'static'
+    ) {
+      container.style.position = 'relative';
+    }
 
-          <div class="op-search-wrap">
 
-            <input
-              class="op-search"
-              type="text"
-              placeholder="국가 또는 국적 검색"
-              autocomplete="off"
-            />
+    if (
+      computed.overflow === 'hidden'
+    ) {
+      container.style.overflow = 'visible';
+    }
 
-          </div>
 
-          <div class="op-list"></div>
-
-          <div class="op-footer">
-
-            <button
-              type="button"
-              class="op-close"
-            >
-              닫기
-            </button>
-
-          </div>
-
-        </div>
-
-      </div>
-    `;
-
+    // 입력창 위에 삽입
     container.insertBefore(
       root,
       input
     );
 
+
+    composerRoot = root;
+
+
     bindCountryUI(root);
+
+
+    updateCountryStatus();
+
+
+    console.log(
+      '[ONEPACE] Composer UI created'
+    );
+
 
     return root;
   }
 
 
   // ============================================================
-  // 국가 선택 UI
+  // 국가 UI
   // ============================================================
 
   function bindCountryUI(root) {
 
+    if (!root) {
+      return;
+    }
+
+
     if (
-      root.dataset.bound === 'true'
+      root.dataset.onepaceBound === 'true'
     ) {
       return;
     }
 
-    root.dataset.bound = 'true';
+
+    root.dataset.onepaceBound = 'true';
+
 
     const button =
       root.querySelector(
         '.onepace-globe-button'
       );
 
-    const picker =
-      root.querySelector(
-        '.op-picker'
-      );
-
-    const search =
-      root.querySelector(
-        '.op-search'
-      );
-
-    const list =
-      root.querySelector(
-        '.op-list'
-      );
-
-    const close =
-      root.querySelector(
-        '.op-close'
-      );
-
     const status =
       root.querySelector(
-        '.op-status'
+        '.onepace-country-status'
       );
 
-    const statusName =
+    const statusCountry =
       root.querySelector(
-        '.op-status-name'
+        '.onepace-status-country'
       );
 
     const statusTime =
       root.querySelector(
-        '.op-status-time'
+        '.onepace-status-time'
+      );
+
+    const popup =
+      root.querySelector(
+        '.onepace-country-popup'
+      );
+
+    const search =
+      root.querySelector(
+        '.onepace-country-search'
+      );
+
+    const list =
+      root.querySelector(
+        '.onepace-country-list'
+      );
+
+    const close =
+      root.querySelector(
+        '.onepace-country-close'
       );
 
 
-    // ----------------------------------------------------------
-    // 국가 목록 렌더링
-    // ----------------------------------------------------------
+    if (
+      !button ||
+      !status ||
+      !statusCountry ||
+      !statusTime ||
+      !popup ||
+      !search ||
+      !list ||
+      !close
+    ) {
 
-    function render(query = '') {
+      console.error(
+        '[ONEPACE] Country UI element 누락'
+      );
 
-      const q =
-        query.trim().toLowerCase();
+      return;
+    }
+
+
+    function renderCountryList(query = '') {
+
+      const normalizedQuery =
+        String(query)
+          .trim()
+          .toLowerCase();
+
 
       const filtered =
         COUNTRIES.filter(
@@ -615,12 +788,13 @@
             return (
               country.name
                 .toLowerCase()
-                .includes(q) ||
+                .includes(normalizedQuery) ||
 
               country.nationality
                 .toLowerCase()
-                .includes(q)
+                .includes(normalizedQuery)
             );
+
           }
         );
 
@@ -628,7 +802,7 @@
       if (!filtered.length) {
 
         list.innerHTML = `
-          <div class="op-empty">
+          <div class="onepace-country-empty">
             검색 결과가 없습니다.
           </div>
         `;
@@ -639,69 +813,79 @@
 
       list.innerHTML =
         filtered
-          .map(
-            (country) => {
+          .map((country) => {
 
-              const selected =
-                selectedCountry?.code ===
-                country.code
-                  ? 'selected'
-                  : '';
+            const selected =
+              selectedCountry?.code ===
+              country.code;
 
-              return `
-                <button
-                  type="button"
-                  class="op-item ${selected}"
-                  data-country="${country.code}"
-                >
 
-                  <span class="op-flag">
-                    ${country.flag}
-                  </span>
+            return `
+              <button
+                type="button"
+                class="onepace-country-item ${selected ? 'selected' : ''}"
+                data-country-code="${escapeHtml(country.code)}"
+              >
+                <span class="onepace-country-flag">
+                  ${country.flag}
+                </span>
 
-                  <span>
-                    ${escapeHtml(
-                      country.nationality
-                    )}
-                  </span>
+                <span class="onepace-country-name">
+                  ${escapeHtml(country.nationality)}
+                </span>
+              </button>
+            `;
 
-                </button>
-              `;
-            }
-          )
+          })
           .join('');
 
 
       list
-        .querySelectorAll('.op-item')
-        .forEach(
-          (item) => {
+        .querySelectorAll(
+          '.onepace-country-item'
+        )
+        .forEach((item) => {
 
-            item.addEventListener(
-              'click',
-              (event) => {
+          item.addEventListener(
+            'click',
+            (event) => {
 
-                event.preventDefault();
-                event.stopPropagation();
+              event.preventDefault();
+              event.stopPropagation();
 
-                selectedCountry =
-                  COUNTRIES.find(
-                    (country) =>
-                      country.code ===
-                      item.dataset.country
-                  ) || null;
 
-                render(search.value);
-              }
-            );
-          }
-        );
+              const code =
+                item.dataset.countryCode;
+
+
+              selectedCountry =
+                COUNTRIES.find(
+                  (country) =>
+                    country.code === code
+                ) || null;
+
+
+              search.value = '';
+
+
+              renderCountryList();
+
+
+              updateCountryStatus();
+
+
+              lastAnalysisKey = '';
+
+
+              analyzeCurrentInput();
+
+            }
+          );
+
+        });
+
     }
 
-
-    // ----------------------------------------------------------
-    // 지구본 버튼
-    // ----------------------------------------------------------
 
     button.addEventListener(
       'click',
@@ -710,61 +894,49 @@
         event.preventDefault();
         event.stopPropagation();
 
+
         const isOpen =
-          picker.classList.contains(
-            'open'
-          );
+          popup.classList.contains('open');
+
 
         if (isOpen) {
 
-          picker.classList.remove(
-            'open'
-          );
-
-          button.classList.remove(
-            'open'
-          );
+          popup.classList.remove('open');
+          button.classList.remove('open');
 
           return;
         }
 
-        render();
+
+        renderCountryList();
+
 
         search.value = '';
 
-        picker.classList.add(
-          'open'
-        );
 
-        button.classList.add(
-          'open'
-        );
+        popup.classList.add('open');
+        button.classList.add('open');
 
-        setTimeout(
-          () => {
-            search.focus();
-          },
-          0
-        );
+
+        setTimeout(() => {
+          search.focus();
+        }, 0);
+
       }
     );
 
-
-    // ----------------------------------------------------------
-    // 국가 검색
-    // ----------------------------------------------------------
 
     search.addEventListener(
       'input',
       () => {
-        render(search.value);
+
+        renderCountryList(
+          search.value
+        );
+
       }
     );
 
-
-    // ----------------------------------------------------------
-    // 닫기
-    // ----------------------------------------------------------
 
     close.addEventListener(
       'click',
@@ -773,362 +945,565 @@
         event.preventDefault();
         event.stopPropagation();
 
-        picker.classList.remove(
-          'open'
-        );
 
-        button.classList.remove(
-          'open'
-        );
+        popup.classList.remove('open');
+        button.classList.remove('open');
 
 
-        if (!selectedCountry) {
-
-          status.classList.remove(
-            'show'
-          );
-
-          return;
-        }
-
-
-        statusName.textContent =
-          selectedCountry.nationality;
-
-        statusTime.textContent =
-          `(현지 시각 ${getLocalTime(
-            selectedCountry.timezone
-          )})`;
-
-        status.classList.add(
-          'show'
-        );
+        updateCountryStatus();
 
 
         lastAnalysisKey = '';
 
+
         analyzeCurrentInput();
+
       }
     );
 
-
-    // ----------------------------------------------------------
-    // 외부 클릭
-    // ----------------------------------------------------------
 
     document.addEventListener(
       'click',
       (event) => {
 
         if (
-          root.contains(
-            event.target
-          )
+          root.contains(event.target)
         ) {
           return;
         }
 
-        picker.classList.remove(
-          'open'
-        );
 
-        button.classList.remove(
-          'open'
-        );
+        popup.classList.remove('open');
+        button.classList.remove('open');
+
       },
       true
     );
 
 
-    render();
+    renderCountryList();
+
   }
 
 
   // ============================================================
-  // 현지 시간
+  // 국가 상태 업데이트
   // ============================================================
 
-  function getLocalTime(timezone) {
+  function updateCountryStatus() {
+
+    if (!composerRoot) {
+      return;
+    }
+
+
+    const status =
+      composerRoot.querySelector(
+        '.onepace-country-status'
+      );
+
+    const statusCountry =
+      composerRoot.querySelector(
+        '.onepace-status-country'
+      );
+
+    const statusTime =
+      composerRoot.querySelector(
+        '.onepace-status-time'
+      );
+
+
+    if (
+      !status ||
+      !statusCountry ||
+      !statusTime
+    ) {
+      return;
+    }
+
+
+    if (!selectedCountry) {
+
+      status.classList.remove('show');
+
+      statusCountry.textContent = '';
+      statusTime.textContent = '';
+
+      return;
+    }
+
+
+    statusCountry.textContent =
+      selectedCountry.nationality;
+
+
+    statusTime.textContent =
+      `(현지 시각 ${getLocalTime(
+        selectedCountry.timezone
+      )})`;
+
+
+    status.classList.add('show');
+
+  }
+
+
+  // ============================================================
+  // API 분석
+  // ============================================================
+
+  async function analyzeMessage(
+    message,
+    country
+  ) {
+
+    const cleanMessage =
+      String(message ?? '').trim();
+
+
+    console.log(
+      '[ONEPACE] API 요청 시작'
+    );
+
+    console.log(
+      '[ONEPACE] text:',
+      cleanMessage
+    );
+
+    console.log(
+      '[ONEPACE] country:',
+      country?.code
+    );
+
+
+    if (
+      !cleanMessage ||
+      !country
+    ) {
+
+      return {
+        risky: false,
+        country
+      };
+
+    }
+
 
     try {
 
-      return new Intl.DateTimeFormat(
-        'ko-KR',
-        {
-          timeZone: timezone,
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
-        }
-      ).format(
-        new Date()
+      const requestBody = {
+        text: cleanMessage,
+        counterpartCountry: country.code
+      };
+
+
+      console.log(
+        '[ONEPACE] API request body:',
+        requestBody
       );
 
-    } catch {
 
-      return '--:--';
+      const response =
+        await fetch(
+          ANALYZE_ENDPOINT,
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+
+            body:
+              JSON.stringify(
+                requestBody
+              )
+          }
+        );
+
+
+      console.log(
+        '[ONEPACE] API status:',
+        response.status
+      );
+
+
+      if (!response.ok) {
+
+        console.warn(
+          '[ONEPACE] 분석 API 응답 오류:',
+          response.status
+        );
+
+
+        return {
+          risky: false,
+          country
+        };
+
+      }
+
+
+      const data =
+        await response.json();
+
+
+      console.log(
+        '[ONEPACE] API response:',
+        data
+      );
+
+
+      const risky =
+        data?.riskDetected === true;
+
+
+      return {
+
+        risky,
+
+        country,
+
+        detectedExpression:
+          data?.detectedExpression || '',
+
+        realtimeDetection:
+          data?.realtimeDetection || '',
+
+        nuanceExplanation:
+          data?.nuanceExplanation || '',
+
+        suggestedText:
+          data?.suggestedText || '',
+
+        raw:
+          data
+
+      };
+
+
+    } catch (error) {
+
+      console.error(
+        '[ONEPACE] API 호출 실패:',
+        error
+      );
+
+
+      return {
+        risky: false,
+        country,
+        error
+      };
+
     }
   }
 
 
   // ============================================================
-  // 실시간 말풍선 표시
+  // 경고창 표시
+  //
+  // 중요:
+  // content-ui.html의 클래스명을 그대로 사용한다.
   // ============================================================
 
-  function showLiveWarning(
+  async function showWarning(
     input,
     analysis
   ) {
 
-    let popup =
+    if (
+      !input ||
+      !analysis?.risky
+    ) {
+      return;
+    }
+
+
+    removeWarning();
+
+
+    const loaded =
+      await ensureTemplates();
+
+
+    if (!loaded) {
+      return;
+    }
+
+
+    const template =
+      document.getElementById(
+        WARNING_TEMPLATE_ID
+      );
+
+
+    if (!template) {
+
+      console.error(
+        '[ONEPACE] warning template 없음'
+      );
+
+      return;
+    }
+
+
+    const wrapper =
+      document.createElement('div');
+
+
+    wrapper.id =
+      WARNING_ID;
+
+
+    // ==========================================================
+    // 핵심
+    //
+    // wrapper 자체는 CSS에서 fixed 말풍선으로 처리
+    // template 내부 구조는 content-ui.html 그대로 사용
+    // ==========================================================
+
+    wrapper.appendChild(
+      template.content.cloneNode(true)
+    );
+
+
+    const warning =
+      wrapper.querySelector(
+        '.onepace-warning'
+      );
+
+    const backdrop =
+      wrapper.querySelector(
+        '.onepace-warning-backdrop'
+      );
+
+    const country =
+      wrapper.querySelector(
+        '.onepace-warning-country'
+      );
+
+    const reason =
+      wrapper.querySelector(
+        '.onepace-warning-reason'
+      );
+
+    const original =
+      wrapper.querySelector(
+        '.onepace-warning-original-text'
+      );
+
+    const suggestion =
+      wrapper.querySelector(
+        '.onepace-warning-suggestion-text'
+      );
+
+    const sendAnyway =
+      wrapper.querySelector(
+        '.onepace-send-anyway'
+      );
+
+    const useSuggestion =
+      wrapper.querySelector(
+        '.onepace-use-suggestion'
+      );
+
+
+    if (!warning) {
+
+      console.error(
+        '[ONEPACE] .onepace-warning 없음'
+      );
+
+      return;
+    }
+
+
+    // ==========================================================
+    // 데이터 삽입
+    // ==========================================================
+
+    if (country) {
+
+      country.textContent =
+        analysis.country?.nationality ||
+        '';
+
+    }
+
+
+    if (reason) {
+
+      reason.textContent =
+        analysis.nuanceExplanation ||
+        analysis.realtimeDetection ||
+        '문화적 차이로 오해가 발생할 수 있는 표현이에요.';
+
+    }
+
+
+    if (original) {
+
+      original.textContent =
+        getText(input).trim();
+
+    }
+
+
+    if (suggestion) {
+
+      suggestion.textContent =
+        analysis.suggestedText ||
+        '더 자연스럽게 전달할 수 있는 표현을 확인해 주세요.';
+
+    }
+
+
+    // ==========================================================
+    // 그대로 전송
+    // ==========================================================
+
+    if (sendAnyway) {
+
+      sendAnyway.addEventListener(
+        'click',
+        (event) => {
+
+          event.preventDefault();
+          event.stopPropagation();
+
+          removeWarning();
+
+          try {
+            input.focus();
+          } catch {}
+
+        }
+      );
+
+    }
+
+
+    // ==========================================================
+    // 수정해서 전송
+    // ==========================================================
+
+    if (useSuggestion) {
+
+      useSuggestion.addEventListener(
+        'click',
+        (event) => {
+
+          event.preventDefault();
+          event.stopPropagation();
+
+
+          const suggestedText =
+            analysis.suggestedText;
+
+
+          if (!suggestedText) {
+
+            removeWarning();
+
+            return;
+          }
+
+
+          setText(
+            input,
+            suggestedText
+          );
+
+
+          activeComposer =
+            input;
+
+
+          lastAnalysisKey =
+            `${selectedCountry?.code || ''}:${suggestedText.trim()}`;
+
+
+          removeWarning();
+
+
+          try {
+            input.focus();
+          } catch {}
+
+        }
+      );
+
+    }
+
+
+    // ==========================================================
+    // 배경 클릭
+    // ==========================================================
+
+    if (backdrop) {
+
+      backdrop.addEventListener(
+        'click',
+        (event) => {
+
+          if (
+            event.target === backdrop
+          ) {
+
+            removeWarning();
+
+          }
+
+        }
+      );
+
+    }
+
+
+    document.body.appendChild(
+      wrapper
+    );
+
+
+    console.log(
+      '[ONEPACE] 경고창 표시',
+      {
+        country:
+          analysis.country?.code,
+
+        original:
+          getText(input).trim(),
+
+        suggestion:
+          analysis.suggestedText
+      }
+    );
+
+  }
+
+
+  // ============================================================
+  // 경고창 제거
+  // ============================================================
+
+  function removeWarning() {
+
+    const existing =
       document.getElementById(
         WARNING_ID
       );
 
 
-    // 위험 없음
-    if (
-      !analysis?.risky
-    ) {
-
-      if (popup) {
-        popup.remove();
-      }
-
-      return;
+    if (existing) {
+      existing.remove();
     }
 
-
-    // 팝업 최초 생성
-    if (!popup) {
-
-      popup =
-        document.createElement(
-          'div'
-        );
-
-      popup.id =
-        WARNING_ID;
-
-      document.body.appendChild(
-        popup
-      );
-    }
-
-
-    popup.innerHTML = `
-
-      <div class="op-realtime-content">
-
-        <div class="op-realtime-title">
-
-          <span class="op-realtime-icon">
-            !
-          </span>
-
-          <span>
-            오해 가능성이 있어요
-          </span>
-
-        </div>
-
-
-        <div class="op-realtime-message">
-
-          ${escapeHtml(
-            analysis.realtimeDetection ||
-            ''
-          )}
-
-          <br />
-
-          ${escapeHtml(
-            analysis.nuanceExplanation ||
-            ''
-          )}
-
-        </div>
-
-
-        <div class="op-realtime-suggestion">
-
-          <span class="op-suggest-label">
-            추천 표현
-          </span>
-
-          <span class="op-suggest-text">
-            ${escapeHtml(
-              analysis.suggestedText ||
-              ''
-            )}
-          </span>
-
-        </div>
-
-
-        <div class="op-realtime-arrow"></div>
-
-      </div>
-
-    `;
-
-
-    positionWarning(
-      input,
-      popup
-    );
   }
 
 
   // ============================================================
-  // 팝업 위치
-  // ============================================================
-
-  function positionWarning(
-    input,
-    popup
-  ) {
-
-    if (
-      !input ||
-      !popup
-    ) {
-      return;
-    }
-
-    const rect =
-      input.getBoundingClientRect();
-
-
-    popup.style.position =
-      'fixed';
-
-    popup.style.zIndex =
-      '2147483647';
-
-    popup.style.pointerEvents =
-      'auto';
-
-    popup.style.boxSizing =
-      'border-box';
-
-    popup.style.visibility =
-      'visible';
-
-
-    // ----------------------------------------------------------
-    // 입력창 가운데
-    // ----------------------------------------------------------
-
-    const popupWidth =
-      Math.min(
-        Math.max(
-          rect.width,
-          330
-        ),
-        460
-      );
-
-    const centerX =
-      rect.left +
-      (
-        rect.width / 2
-      );
-
-    let left =
-      centerX -
-      (
-        popupWidth / 2
-      );
-
-
-    const viewportPadding =
-      16;
-
-
-    left =
-      Math.max(
-        viewportPadding,
-        Math.min(
-          left,
-          window.innerWidth -
-          popupWidth -
-          viewportPadding
-        )
-      );
-
-
-    popup.style.left =
-      `${Math.round(left)}px`;
-
-    popup.style.width =
-      `${popupWidth}px`;
-
-
-    // ----------------------------------------------------------
-    // 높이 측정
-    // ----------------------------------------------------------
-
-    popup.style.top =
-      'auto';
-
-    popup.style.bottom =
-      'auto';
-
-    const popupHeight =
-      popup.offsetHeight;
-
-
-    // ----------------------------------------------------------
-    // 입력창 위에 배치
-    // ----------------------------------------------------------
-
-    let top =
-      rect.top -
-      popupHeight -
-      8;
-
-
-    // 화면 위쪽을 넘어가면
-    // 입력창 내부로 들어가지 않도록
-    // 최소한 화면 상단에 고정
-    if (top < 8) {
-
-      top = 8;
-    }
-
-
-    popup.style.top =
-      `${Math.round(top)}px`;
-
-    popup.style.bottom =
-      'auto';
-
-
-    const content =
-      popup.querySelector(
-        '.op-realtime-content'
-      );
-
-    if (content) {
-
-      content.style.display =
-        'block';
-
-      content.style.visibility =
-        'visible';
-
-      content.style.opacity =
-        '1';
-
-      content.style.boxSizing =
-        'border-box';
-    }
-  }
-
-
-  // ============================================================
-  // 현재 입력값 분석
+  // 현재 입력 분석
   // ============================================================
 
   async function analyzeCurrentInput() {
@@ -1137,20 +1512,31 @@
       activeComposer ||
       findComposer();
 
+
     if (!input) {
 
-      console.warn(
-        '[ONEPACE] 입력창을 찾지 못했습니다.'
+      console.log(
+        '[ONEPACE] 입력창을 찾을 수 없음'
       );
 
       return;
     }
 
 
-    // 국가 선택 안 됨
+    if (!enabled) {
+
+      removeWarning();
+
+      return;
+    }
+
+
     if (!selectedCountry) {
 
       removeWarning();
+
+      lastAnalysisKey = '';
+      latestRequestKey = '';
 
       return;
     }
@@ -1160,7 +1546,6 @@
       getText(input).trim();
 
 
-    // 입력값 없음
     if (!message) {
 
       removeWarning();
@@ -1176,17 +1561,17 @@
       `${selectedCountry.code}:${message}`;
 
 
-    // 같은 요청 방지
     if (
-      analysisKey ===
-      lastAnalysisKey
+      analysisKey === lastAnalysisKey
     ) {
+
       return;
     }
 
 
     lastAnalysisKey =
       analysisKey;
+
 
     latestRequestKey =
       analysisKey;
@@ -1205,24 +1590,46 @@
       );
 
 
-    // 최신 요청이 아니면 버림
+    // ==========================================================
+    // 오래된 응답 무시
+    // ==========================================================
+
     if (
-      analysisKey !==
-      latestRequestKey
+      analysisKey !== latestRequestKey
     ) {
 
       console.log(
-        '[ONEPACE] 이전 API 응답 무시'
+        '[ONEPACE] 오래된 API 응답 무시'
       );
 
       return;
     }
 
 
-    // 위험 없음
+    // ==========================================================
+    // 실제 현재 입력과 다시 비교
+    //
+    // 사용자가 API 응답을 기다리는 사이
+    // 입력값을 바꿨다면 무조건 폐기
+    // ==========================================================
+
+    const currentInputText =
+      getText(input).trim();
+
+
     if (
-      !analysis.risky
+      currentInputText !== message
     ) {
+
+      console.log(
+        '[ONEPACE] 입력값 변경으로 API 응답 폐기'
+      );
+
+      return;
+    }
+
+
+    if (!analysis.risky) {
 
       removeWarning();
 
@@ -1230,16 +1637,16 @@
     }
 
 
-    // 위험 있음
-    showLiveWarning(
+    await showWarning(
       input,
       analysis
     );
+
   }
 
 
   // ============================================================
-  // 분석 debounce
+  // Debounce
   // ============================================================
 
   function scheduleAnalysis() {
@@ -1256,94 +1663,39 @@
           analyzeCurrentInput();
 
         },
-        180
+        350
       );
+
   }
 
 
   // ============================================================
-  // 말풍선 제거
+  // 입력 이벤트
   // ============================================================
 
-  function removeWarning() {
+  function bindInputMonitoring(input) {
 
-    const popup =
-      document.getElementById(
-        WARNING_ID
-      );
-
-    if (popup) {
-      popup.remove();
-    }
-  }
-
-
-  // ============================================================
-  // ONEPACE UI 전체 제거
-  // ============================================================
-
-  function removeAll() {
-
-    clearTimeout(
-      analysisTimer
-    );
-
-    analysisTimer = null;
-
-    lastAnalysisKey = '';
-    latestRequestKey = '';
-
-    removeWarning();
-
-
-    document
-      .querySelectorAll(
-        `#${ROOT_ID}`
-      )
-      .forEach(
-        (element) => {
-          element.remove();
-        }
-      );
-  }
-
-
-  // ============================================================
-  // 입력 이벤트 감시
-  // ============================================================
-
-  function bindInputMonitoring(
-    input
-  ) {
-
-    if (!input) return;
-
-
-    if (
-      input.dataset
-        .onepaceInputBound ===
-      'true'
-    ) {
-
-      activeComposer =
-        input;
-
+    if (!input) {
       return;
     }
-
-
-    input.dataset
-      .onepaceInputBound =
-      'true';
 
 
     activeComposer =
       input;
 
 
-    // ----------------------------------------------------------
-    // 입력
-    // ----------------------------------------------------------
+    if (
+      input.dataset.onepaceInputBound ===
+      'true'
+    ) {
+
+      return;
+    }
+
+
+    input.dataset.onepaceInputBound =
+      'true';
+
 
     input.addEventListener(
       'input',
@@ -1352,16 +1704,17 @@
         activeComposer =
           input;
 
+
+        // 입력이 바뀌면 이전 결과를 즉시 무효화
+        latestRequestKey = '';
+
+
         scheduleAnalysis();
 
       },
       false
     );
 
-
-    // ----------------------------------------------------------
-    // 포커스
-    // ----------------------------------------------------------
 
     input.addEventListener(
       'focus',
@@ -1373,20 +1726,7 @@
       },
       false
     );
-  }
 
-
-  // ============================================================
-  // 전송 버튼
-  // ============================================================
-
-  function bindSendButton(
-    input
-  ) {
-
-    if (!input) return;
-
-    // 기존 전송 동작 그대로 유지
   }
 
 
@@ -1394,7 +1734,7 @@
   // 전체 스캔
   // ============================================================
 
-  function scan() {
+  async function scan() {
 
     if (!enabled) {
       return;
@@ -1412,11 +1752,11 @@
 
       input =
         findComposer();
+
     }
 
 
     if (!input) {
-
       return;
     }
 
@@ -1425,7 +1765,7 @@
       input;
 
 
-    findOrCreateRoot(
+    await createComposerUI(
       input
     );
 
@@ -1434,15 +1774,51 @@
       input
     );
 
-
-    bindSendButton(
-      input
-    );
   }
 
 
   // ============================================================
-  // 활성화 / 비활성화 메시지
+  // 전체 UI 제거
+  // ============================================================
+
+  function removeAll() {
+
+    clearTimeout(
+      analysisTimer
+    );
+
+
+    analysisTimer =
+      null;
+
+
+    lastAnalysisKey = '';
+    latestRequestKey = '';
+
+
+    removeWarning();
+
+
+    document
+      .querySelectorAll(
+        `#${ROOT_ID}`
+      )
+      .forEach(
+        (element) => {
+
+          element.remove();
+
+        }
+      );
+
+
+    composerRoot = null;
+
+  }
+
+
+  // ============================================================
+  // Extension message
   // ============================================================
 
   chrome.runtime.onMessage.addListener(
@@ -1485,7 +1861,6 @@
         return true;
       }
 
-      return false;
     }
   );
 
@@ -1503,9 +1878,11 @@
       enabled =
         result.onepaceEnabled;
 
+
       if (enabled) {
         scan();
       }
+
     }
   );
 
@@ -1535,7 +1912,9 @@
       } else {
 
         removeAll();
+
       }
+
     }
   );
 
@@ -1551,28 +1930,7 @@
         return;
       }
 
-
-      document
-        .querySelectorAll(
-          `#${ROOT_ID}`
-        )
-        .forEach(
-          (root) => {
-
-            const time =
-              root.querySelector(
-                '.op-status-time'
-              );
-
-            if (!time) return;
-
-
-            time.textContent =
-              `(현지 시각 ${getLocalTime(
-                selectedCountry.timezone
-              )})`;
-          }
-        );
+      updateCountryStatus();
 
     },
     30000
@@ -1582,6 +1940,9 @@
   // ============================================================
   // DOM 변경 감지
   // ============================================================
+
+  let observerTimer = null;
+
 
   const observer =
     new MutationObserver(
@@ -1601,14 +1962,40 @@
           setTimeout(
             () => {
 
-              observerTimer =
-                null;
+              observerTimer = null;
 
-              scan();
+
+              const currentInput =
+                findComposer();
+
+
+              if (
+                currentInput &&
+                currentInput !== activeComposer
+              ) {
+
+                activeComposer =
+                  currentInput;
+
+
+                scan();
+
+
+              } else if (
+                currentInput &&
+                !document.getElementById(
+                  ROOT_ID
+                )
+              ) {
+
+                scan();
+
+              }
 
             },
             500
           );
+
       }
     );
 
@@ -1623,71 +2010,6 @@
 
 
   // ============================================================
-  // 팝업 위치 재계산
-  // ============================================================
-
-  function schedulePopupPosition() {
-
-    if (repositionTimer) {
-      return;
-    }
-
-
-    repositionTimer =
-      requestAnimationFrame(
-        () => {
-
-          repositionTimer =
-            null;
-
-
-          const popup =
-            document.getElementById(
-              WARNING_ID
-            );
-
-          if (!popup) {
-            return;
-          }
-
-
-          const input =
-            activeComposer;
-
-          if (!input) {
-            return;
-          }
-
-
-          positionWarning(
-            input,
-            popup
-          );
-        }
-      );
-  }
-
-
-  window.addEventListener(
-    'resize',
-    schedulePopupPosition,
-    {
-      passive: true
-    }
-  );
-
-
-  window.addEventListener(
-    'scroll',
-    schedulePopupPosition,
-    {
-      passive: true,
-      capture: true
-    }
-  );
-
-
-  // ============================================================
   // 초기 실행
   // ============================================================
 
@@ -1695,7 +2017,8 @@
 
 
   console.log(
-    '[ONEPACE] Realtime AI analysis content script loaded'
+    '[ONEPACE] Realtime AI analysis connected:',
+    ANALYZE_ENDPOINT
   );
 
 })();
