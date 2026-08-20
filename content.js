@@ -839,47 +839,142 @@
   // 입력창 위치가 바뀌지 않는다.
   // ============================================================
 
-  function positionWarning(input, popup) {
+function positionWarning(input, popup) {
 
-    if (!input || !popup) {
-      return;
-    }
-
-
-    const rect =
-      input.getBoundingClientRect();
-
-
-    popup.style.position =
-      'fixed';
-
-    popup.style.left =
-      `${Math.round(rect.left)}px`;
-
-    popup.style.bottom =
-      `${Math.round(
-        window.innerHeight - rect.top + 10
-      )}px`;
-
-    popup.style.top =
-      'auto';
-
-    popup.style.width =
-      `${Math.min(
-        Math.max(rect.width, 330),
-        460
-      )}px`;
-
-    popup.style.zIndex =
-      '2147483647';
-
-    popup.style.pointerEvents =
-      'auto';
-
-    popup.style.boxSizing =
-      'border-box';
+  if (!input || !popup) {
+    return;
   }
 
+  const rect = input.getBoundingClientRect();
+
+  // ------------------------------------------------------------
+  // 기존 말풍선 디자인 유지
+  // ------------------------------------------------------------
+
+  popup.style.position = 'fixed';
+
+  popup.style.zIndex = '2147483647';
+
+  popup.style.pointerEvents = 'auto';
+
+  popup.style.boxSizing = 'border-box';
+
+  // ------------------------------------------------------------
+  // 입력창 가운데 정렬
+  // ------------------------------------------------------------
+
+  const popupWidth = Math.min(
+    Math.max(rect.width, 330),
+    460
+  );
+
+  const centerX =
+    rect.left + (rect.width / 2);
+
+  let left =
+    centerX - (popupWidth / 2);
+
+  // 화면 밖으로 나가지 않도록 보정
+  const viewportPadding = 16;
+
+  left = Math.max(
+    viewportPadding,
+    Math.min(
+      left,
+      window.innerWidth - popupWidth - viewportPadding
+    )
+  );
+
+  popup.style.left =
+    `${Math.round(left)}px`;
+
+  popup.style.width =
+    `${popupWidth}px`;
+
+  // ------------------------------------------------------------
+  // 팝업을 먼저 정상 렌더링시킨 후 실제 높이 측정
+  // ------------------------------------------------------------
+
+  popup.style.top = 'auto';
+
+  popup.style.bottom = 'auto';
+
+  // display:none 등의 CSS가 있다면 정상적으로 측정될 수 있도록
+  // visibility만 유지
+  popup.style.visibility = 'visible';
+
+  const popupHeight =
+    popup.offsetHeight;
+
+  // ------------------------------------------------------------
+  // 입력창 위쪽에 겹쳐 배치
+  //
+  // 입력창의 top보다 팝업 bottom이 8px 위에 오도록 함.
+  //
+  // 즉:
+  //
+  //      ┌───────────────────────┐
+  //      │   ONEPACE 말풍선      │
+  //      │   오해 가능성이...    │
+  //      │   추천 표현 ...       │
+  //      └─────────▼─────────────┘
+  //                8px
+  //      ┌───────────────────────┐
+  //      │ 입력창 텍스트          │
+  //      │                       │
+  //      └───────────────────────┘
+  //
+  // ------------------------------------------------------------
+
+  let top =
+    rect.top - popupHeight - 8;
+
+  // ------------------------------------------------------------
+  // 화면 위쪽을 넘어가면 입력창 내부 상단에 살짝 겹침
+  // 하지만 텍스트 영역은 피함.
+  // ------------------------------------------------------------
+
+  if (top < 8) {
+
+    /*
+     * 팝업을 입력창 위쪽에 최대한 유지.
+     *
+     * 입력창 자체와 겹쳐야 하는 경우에는
+     * textarea의 첫 줄 영역을 가리지 않도록
+     * 입력창 상단에서 최소한의 공간만 사용한다.
+     */
+
+    top = Math.max(
+      8,
+      rect.top
+    );
+  }
+
+  popup.style.top =
+    `${Math.round(top)}px`;
+
+  popup.style.bottom =
+    'auto';
+
+  // ------------------------------------------------------------
+  // 중요:
+  // 기존 CSS의 말풍선 구조를 그대로 살림
+  // ------------------------------------------------------------
+
+  const content =
+    popup.querySelector('.op-realtime-content');
+
+  if (content) {
+
+    content.style.display = 'block';
+
+    content.style.visibility = 'visible';
+
+    content.style.opacity = '1';
+
+    content.style.boxSizing = 'border-box';
+  }
+}
 
   // ============================================================
   // 실시간 분석

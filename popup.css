@@ -34,11 +34,20 @@ body {
 }
 
 .logo-icon {
-  width: 14px;
-  height: 14px;
-  border: 2.5px solid #00c49f;
-  border-radius: 50%;
-  display: inline-block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+}
+
+.logo-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #222;
 }
 
 .brand-name {
